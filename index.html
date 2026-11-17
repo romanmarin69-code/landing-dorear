@@ -146,7 +146,9 @@
   </div>
   <figure class="map" id="mapa">
     <div class="map__frame" id="mapFrame">
-      <iframe class="map__embed" title="Mapa: Dorear en Rosario Vera Peñaloza 460, Puerto Madero" src="https://www.google.com/maps?q=Rosario+Vera+Pe%C3%B1aloza+460,+Puerto+Madero,+Buenos+Aires&amp;z=16&amp;hl=es&amp;output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+      <!-- fachada: el iframe recibe su src recién cuando el pie se acerca (motion.js); Google Maps pesa y no debe competir con la apertura -->
+      <iframe class="map__embed" title="Mapa: Dorear en Rosario Vera Peñaloza 460, Puerto Madero" data-src="https://www.google.com/maps?q=Rosario+Vera+Pe%C3%B1aloza+460,+Puerto+Madero,+Buenos+Aires&amp;z=16&amp;hl=es&amp;output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+      <noscript><iframe class="map__embed" title="Mapa: Dorear en Rosario Vera Peñaloza 460, Puerto Madero" src="https://www.google.com/maps?q=Rosario+Vera+Pe%C3%B1aloza+460,+Puerto+Madero,+Buenos+Aires&amp;z=16&amp;hl=es&amp;output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" style="position:absolute;inset:0"></iframe></noscript>
       <button class="map__veil label" type="button" id="mapVeil"><span>Tocá para mover el mapa</span></button>
       <i class="map__tick map__tick--tl" aria-hidden="true"></i><i class="map__tick map__tick--tr" aria-hidden="true"></i><i class="map__tick map__tick--bl" aria-hidden="true"></i><i class="map__tick map__tick--br" aria-hidden="true"></i>
     </div>

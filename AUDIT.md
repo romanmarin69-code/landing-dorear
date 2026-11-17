@@ -202,8 +202,8 @@ Medido el 2026-11-17 en el mismo equipo (Intel HD 520), con los dos sitios servi
 ### Métricas
 | | Antes | Después |
 |---|---|---|
-| Lighthouse mobile — Perf / A11y / BP / SEO | 42 / 95 / 93 / 90 | **68–70 / 100 / 100 / 100** |
-| Lighthouse desktop — Perf / A11y / BP / SEO | 88 / 95 / 96 / 90 | **98 / 100 / 100 / 100** |
+| Lighthouse mobile — Perf / A11y / BP / SEO | 42 / 95 / 93 / 90 | **60–70 / 100 / 100 / 100** (oscila según la carga del equipo) |
+| Lighthouse desktop — Perf / A11y / BP / SEO | 88 / 95 / 96 / 90 | **91–98 / 100 / 100 / 100** |
 | LCP mobile (simulado por Lighthouse) | 14,0 s | **2,9 s** |
 | LCP real observado | 1,5 s (era el preloader) | **1,1 s** (el título) |
 | TBT mobile (simulado) | 3.830 ms | **990–1.110 ms** |
@@ -261,9 +261,15 @@ Medido el 2026-11-17 en el mismo equipo (Intel HD 520), con los dos sitios servi
 ### Falsos positivos del detector (verificados)
 `radial-halo` (polvo en suspensión, intencional) · `overused-font` Montserrat (es la tipografía impresa en el packaging renderizado; se mantiene por coherencia de marca y sólo para rótulos) · `low-contrast` en la firma y la palabra del footer (texto grande, ≥ 3:1) · `cramped-padding` en la portada (es full-bleed a propósito) · `flat-type-hierarchy` (lee el `h2` oculto para lectores de pantalla).
 
+### Segunda ronda (pedidos del cliente)
+- **Acento dorado `#E0A526`** como chispa en detalles mínimos (ver MOTION.md, "El acento").
+- **Mapa de ubicación** en el pie (Google Maps teñido al estudio, botón "Cómo llegar"). Se carga como fachada: el iframe recién pide el mapa cuando el pie está a 800 px de entrar en pantalla, para no sumar el peso de Google a la apertura. No captura la rueda hasta que se lo activa.
+- **Estado del local**: sólo se muestra "Abierto · hasta las …"; cerrado no se muestra nada.
+- **Marca "Ce" del dorso del vaso** eliminada de las 42 vistas donde aparecía (inpainting sobre los trazos, sin tocar el logo).
+
 ### Decisiones pendientes
 1. **Pastelería**: la bajada dice "Pastelería de autor" y la carta sólo tiene café.
 2. **"Adicionales: consultar"** convive con adicionales que sí tienen precio: ¿se aclara o se saca?
-3. **Feriados**: el estado abierto/cerrado sólo conoce el horario semanal.
+3. **Feriados**: el estado "Abierto" sólo conoce el horario semanal.
 4. **Imagen para compartir (Open Graph) y dominio**: hace falta una imagen 1200×630 y la URL final para `og:image` y `canonical`.
 5. **Archivos `.blend`**: con ellos se puede re-renderizar con más contraste de luz (rim light) y generar una versión del giro para mobile nativa.

@@ -37,7 +37,16 @@ var css = getComputedStyle(root), CREAM = css.getPropertyValue('--cream').trim()
 /* ---------- mapa: no captura la rueda ni el arrastre hasta que se lo activa ---------- */
 (function mapa() {
   var f = $('#mapFrame'), v = $('#mapVeil'); if (!f || !v) return;
-  v.addEventListener('click', function () { f.classList.add('is-live'); var ifr = f.querySelector('iframe'); if (ifr) ifr.focus(); });
+  // fachada: el mapa se pide cuando el pie está a 800 px de entrar en pantalla
+  var ifr = f.querySelector('iframe[data-src]');
+  function load() { if (ifr && !ifr.src) ifr.src = ifr.getAttribute('data-src'); }
+  if (ifr) {
+    if ('IntersectionObserver' in window) {
+      var io = new IntersectionObserver(function (es) { if (es.some(function (e) { return e.isIntersecting; })) { load(); io.disconnect(); } }, { rootMargin: '800px 0px' });
+      io.observe(f);
+    } else load();
+  }
+  v.addEventListener('click', function () { load(); f.classList.add('is-live'); if (ifr) ifr.focus(); });
   f.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') f.classList.remove('is-live'); });
 })();
 

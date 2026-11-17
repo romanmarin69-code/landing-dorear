@@ -129,7 +129,7 @@ ul{margin:0;padding:0;list-style:none}
   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   animation:grain 1s steps(8) infinite}
 @keyframes grain{0%{transform:translate(0,0)}12%{transform:translate(-3%,-5%)}25%{transform:translate(-6%,2%)}37%{transform:translate(4%,-6%)}50%{transform:translate(-2%,6%)}62%{transform:translate(-6%,3%)}75%{transform:translate(5%,0)}87%{transform:translate(2%,5%)}100%{transform:translate(0,0)}}
-.hero.is-off .mote,.hero.is-off .grain,.hero.is-off .beam__ray,.hero.is-off .status i{animation-play-state:paused}
+.hero.is-off .mote,.hero.is-off .grain,.hero.is-off .beam__ray,.hero.is-off .status i::after{animation-play-state:paused}
 
 .stage{position:absolute;inset:0;z-index:2;touch-action:pan-y;transform-origin:62% 100%;outline:none}
 .stage.is-grab{cursor:grab}.stage.is-grabbing{cursor:grabbing}
@@ -163,8 +163,11 @@ ul{margin:0;padding:0;list-style:none}
 .status{display:inline-flex;align-items:center;gap:var(--s2);color:var(--kraft-hi)}
 .status i{width:7px;height:7px;border-radius:50%;border:1px solid currentColor}
 .status[hidden]{display:none}
-.status.is-open i{border-color:var(--gold);background:var(--gold);box-shadow:0 0 0 3px var(--gold-glow);animation:ember 2.8s var(--ease-cut) infinite alternate}
-@keyframes ember{from{box-shadow:0 0 0 2px var(--gold-glow)}to{box-shadow:0 0 0 5px rgb(224 165 38 / .06)}}
+.status i{position:relative}
+.status.is-open i{border-color:var(--gold);background:var(--gold)}
+/* el latido es un anillo que crece y se apaga: sólo transform y opacity (compositor, sin repintar) */
+.status.is-open i::after{content:"";position:absolute;inset:-4px;border-radius:50%;background:var(--gold-glow);animation:ember 2.8s var(--ease-cut) infinite alternate}
+@keyframes ember{from{transform:scale(.7);opacity:1}to{transform:scale(1.25);opacity:.3}}
 .hero__foot{position:absolute;z-index:3;left:var(--gutter);right:var(--gutter);bottom:calc(var(--s6) + env(safe-area-inset-bottom,0px));display:flex;gap:var(--s7);color:var(--kraft-hi);pointer-events:none}
 .hero__foot a{pointer-events:auto}
 .hint{position:absolute;z-index:3;right:var(--gutter);top:calc(var(--nav-h) + env(safe-area-inset-top,0px) + var(--s5));display:flex;align-items:center;gap:var(--s3);color:var(--kraft-hi);pointer-events:none}
@@ -291,6 +294,6 @@ ul{margin:0;padding:0;list-style:none}
 /* ---------------- movimiento reducido: otra versión, no "todo apagado" ---------------- */
 @media (prefers-reduced-motion:reduce){
   html{scroll-behavior:auto}
-  .mote,.grain,.beam__ray,.status i{animation:none}
+  .mote,.grain,.beam__ray,.status i::after{animation:none}
   .cta:hover svg,.cta:focus-visible svg{animation:none;transform:translate(3px,-3px)}
 }
