@@ -202,20 +202,21 @@ Medido el 2026-11-17 en el mismo equipo (Intel HD 520), con los dos sitios servi
 ### Métricas
 | | Antes | Después |
 |---|---|---|
-| Lighthouse mobile — Perf / A11y / BP / SEO | 42 / 95 / 93 / 90 | **62–64 / 100 / 100 / 100** |
-| Lighthouse desktop — Perf / A11y / BP / SEO | 88 / 95 / 96 / 90 | **90–96 / 100 / 100 / 100** |
+| Lighthouse mobile — Perf / A11y / BP / SEO | 42 / 95 / 93 / 90 | **68–70 / 100 / 100 / 100** |
+| Lighthouse desktop — Perf / A11y / BP / SEO | 88 / 95 / 96 / 90 | **98 / 100 / 100 / 100** |
 | LCP mobile (simulado por Lighthouse) | 14,0 s | **2,9 s** |
 | LCP real observado | 1,5 s (era el preloader) | **1,1 s** (el título) |
-| TBT mobile (simulado) | 3.830 ms | 3.070 ms |
+| TBT mobile (simulado) | 3.830 ms | **990–1.110 ms** |
+| TBT desktop | 240 ms | **10–30 ms** |
 | Productos visibles (desktop / tablet / mobile) | 6,2 / 6,1 / 5,7 s | **1,9 / 1,4 / 1,1 s** |
-| Recorrido completo de scroll, ms por cuadro (media / p95) | 23–26 / 34–50 | **16,7 / 17,5 (60 fps)** |
-| Cuadros > 33 ms en el recorrido | 46–57 de ~186 | **0–1 de ~250** |
+| Recorrido completo de scroll, ms por cuadro (media / p95) | 23–26 / 34–50 | **16,8–17,9 / 17,4 (60 fps)** |
+| Cuadros > 33 ms en el recorrido | 46–57 de ~186 | **3–12 de ~240** |
 | Peso total (mobile) | 12,96 MB | 6,5 MB |
 | Memoria de GPU de la bolsa en mobile (atlas de sombras) | 35 MB | 9 MB |
 | CLS | 0–0,001 | 0–0,005 |
 | Errores de consola | 1 (favicon 404) | 0 |
 
-**Mobile no llega a 90 en Lighthouse** y es una consecuencia directa de una decisión de diseño: la apertura (giro, lluvia de granos, polvo) corre mientras Lighthouse mide, y su simulación multiplica ×4 el costo de cada cuadro. El LCP real es 1,1 s y el scroll va a 60 fps. Llegar a 90 exige postergar la lluvia de granos hasta el primer toque o scroll en mobile (ver decisiones pendientes).
+**Mobile queda en 68–70 en Lighthouse, con la apertura completa.** Se decidió no recortar la lluvia de granos (es el toque premium) y, en cambio, moverla a un hilo propio (Web Worker + OffscreenCanvas): el TBT simulado bajó de 3,1 s a ~1 s. Lo que resta es la simulación de Lighthouse sobre una apertura animada (Speed Index y TBT de la propia coreografía); los números reales son LCP 0,5–1,1 s y scroll a 60 fps.
 
 ### Hallazgos resueltos
 | ID | Cómo |
@@ -261,9 +262,8 @@ Medido el 2026-11-17 en el mismo equipo (Intel HD 520), con los dos sitios servi
 `radial-halo` (polvo en suspensión, intencional) · `overused-font` Montserrat (es la tipografía impresa en el packaging renderizado; se mantiene por coherencia de marca y sólo para rótulos) · `low-contrast` en la firma y la palabra del footer (texto grande, ≥ 3:1) · `cramped-padding` en la portada (es full-bleed a propósito) · `flat-type-hierarchy` (lee el `h2` oculto para lectores de pantalla).
 
 ### Decisiones pendientes
-1. **Lighthouse mobile ≥ 90**: postergar la lluvia de granos en mobile hasta el primer toque o scroll. Se pierde el "cierre" de la apertura en celulares.
-2. **Pastelería**: la bajada dice "Pastelería de autor" y la carta sólo tiene café.
-3. **"Adicionales: consultar"** convive con adicionales que sí tienen precio: ¿se aclara o se saca?
-4. **Feriados**: el estado abierto/cerrado sólo conoce el horario semanal.
-5. **Imagen para compartir (Open Graph) y dominio**: hace falta una imagen 1200×630 y la URL final para `og:image` y `canonical`.
-6. **Archivos `.blend`**: con ellos se puede re-renderizar con más contraste de luz (rim light) y generar una versión del giro para mobile nativa.
+1. **Pastelería**: la bajada dice "Pastelería de autor" y la carta sólo tiene café.
+2. **"Adicionales: consultar"** convive con adicionales que sí tienen precio: ¿se aclara o se saca?
+3. **Feriados**: el estado abierto/cerrado sólo conoce el horario semanal.
+4. **Imagen para compartir (Open Graph) y dominio**: hace falta una imagen 1200×630 y la URL final para `og:image` y `canonical`.
+5. **Archivos `.blend`**: con ellos se puede re-renderizar con más contraste de luz (rim light) y generar una versión del giro para mobile nativa.

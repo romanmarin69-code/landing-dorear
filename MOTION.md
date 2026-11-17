@@ -97,7 +97,13 @@ Gama baja = `saveData`, `deviceMemory ≤ 4`, `hardwareConcurrency ≤ 4` o caí
 - 24 motas de polvo en lugar de 64. Sin *rack focus* (sólo oscurecimiento).
 - El ajuste dinámico (`beansLow`) sigue como red de seguridad: si el cuadro supera 22 ms durante 3 s, baja la resolución de los granos y apaga el *rack focus*.
 
-## 9. Presupuesto de carga
+## 9. Los granos tienen su propio hilo
+
+La lluvia de granos es el cierre de la apertura y se ve completa en todos los dispositivos. Para que no le cueste fluidez al resto, su física y su dibujo corren en un **Web Worker** con `OffscreenCanvas` (`assets/beans-worker.js` + `assets/beans.js`): el hilo principal sólo le manda, una vez por cuadro, el ángulo y la velocidad de la bolsa, y los empujones del cursor. El scroll, los toques y el render de los productos no compiten con 500 granos chocando entre sí.
+
+En navegadores sin `OffscreenCanvas` el mismo `beans.js` corre en el hilo principal, con idéntico resultado visual.
+
+## 10. Presupuesto de carga
 
 - El texto se pinta desde el primer cuadro, "sin luz" (`--dim-ink`): es el LCP y no depende de JS.
 - Las vistas, el flujo óptico, las sombras y los atlas se piden 150 ms después del primer pintado.

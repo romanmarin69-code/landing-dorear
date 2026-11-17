@@ -36,7 +36,7 @@ var hintT = $('#hintT'), stage = $('#stage');
 var HINT = COARSE ? 'Deslizá para girar' : 'Arrastrá para girar';
 if (hintT) hintT.textContent = HINT;
 if (stage) {
-  stage.addEventListener('focus', function () { if (hintT) hintT.textContent = 'Usá las flechas para girar'; });
+  stage.addEventListener('focus', function () { if (hintT && stage.matches(':focus-visible')) hintT.textContent = 'Usá las flechas para girar'; });
   stage.addEventListener('blur', function () { if (hintT) hintT.textContent = HINT; });
 }
 
