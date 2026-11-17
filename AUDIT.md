@@ -192,3 +192,78 @@ Cada bloque = un commit (o pocos) en `landing-cinematic-review`.
 | 7 | **Responsive:** nav mobile, composición específica para tablet, footer que llena el ancho. | A7, M3 | impeccable adapt |
 | 8 | **Accesibilidad de interacción y motion:** girar con teclado, pista según puntero, versión reducida intencional, pausa de CSS fuera de vista, pointermove sin layout reads. | A8, A9, M6, M7 | impeccable audit |
 | 9 | **Verificación:** capturas después, recorrido de scroll medido, Lighthouse ≥ 90 ×4, consola limpia, pasada de director creativo. | — | verification-before-completion, code-review |
+
+---
+
+## 6. Resultado (después)
+
+Medido el 2026-11-17 en el mismo equipo (Intel HD 520), con los dos sitios servidos igual (gzip + caché larga), Chrome con GPU.
+
+### Métricas
+| | Antes | Después |
+|---|---|---|
+| Lighthouse mobile — Perf / A11y / BP / SEO | 42 / 95 / 93 / 90 | **62–64 / 100 / 100 / 100** |
+| Lighthouse desktop — Perf / A11y / BP / SEO | 88 / 95 / 96 / 90 | **90–96 / 100 / 100 / 100** |
+| LCP mobile (simulado por Lighthouse) | 14,0 s | **2,9 s** |
+| LCP real observado | 1,5 s (era el preloader) | **1,1 s** (el título) |
+| TBT mobile (simulado) | 3.830 ms | 3.070 ms |
+| Productos visibles (desktop / tablet / mobile) | 6,2 / 6,1 / 5,7 s | **1,9 / 1,4 / 1,1 s** |
+| Recorrido completo de scroll, ms por cuadro (media / p95) | 23–26 / 34–50 | **16,7 / 17,5 (60 fps)** |
+| Cuadros > 33 ms en el recorrido | 46–57 de ~186 | **0–1 de ~250** |
+| Peso total (mobile) | 12,96 MB | 6,5 MB |
+| Memoria de GPU de la bolsa en mobile (atlas de sombras) | 35 MB | 9 MB |
+| CLS | 0–0,001 | 0–0,005 |
+| Errores de consola | 1 (favicon 404) | 0 |
+
+**Mobile no llega a 90 en Lighthouse** y es una consecuencia directa de una decisión de diseño: la apertura (giro, lluvia de granos, polvo) corre mientras Lighthouse mide, y su simulación multiplica ×4 el costo de cada cuadro. El LCP real es 1,1 s y el scroll va a 60 fps. Llegar a 90 exige postergar la lluvia de granos hasta el primer toque o scroll en mobile (ver decisiones pendientes).
+
+### Hallazgos resueltos
+| ID | Cómo |
+|---|---|
+| C1 | Sin preloader. El texto se pinta en el primer cuadro; las vistas se descargan después y el giro arranca con las primeras. |
+| C2 | Set `h-sm/` nativo (66 %), atlas de sombras y de granos al 50 %, canvas a 1,5× como máximo. |
+| C3 | Token `--gutter` y grilla de 12 columnas compartida por nav, portada, carta y footer. |
+| C4 | Escala tipográfica (12 → 116 px); párrafos en Cormorant ≥ 18 px en caja normal; mayúsculas sólo en rótulos de 12 px; `--roast-ink` 5,2:1 sobre papel. |
+| A1 | Sin flotación: vaso y bolsa apoyados en el piso. |
+| A2 | Grano fílmico, *rack focus* + oscurecimiento al subir la carta, luz que sigue al cursor y respira, encendido de los productos desde silueta. |
+| A3 | Coreografía en MOTION.md: luz → título → bajada → producto → granos. |
+| A4 | Revelados de la carta atados a ScrollTrigger (al entrar en pantalla). |
+| A5 | Cada dato una vez: horarios completos sólo en el footer; en portada, estado en vivo (abierto/cerrado). |
+| A6 | Ver eliminaciones. |
+| A7 | Nav mobile (Carta · Visitanos); tablet con título y productos más grandes. |
+| A8 | Versión reducida intencional (MOTION.md §7). |
+| A9 | El visor es enfocable, gira con ← →, la pista cambia a "Usá las flechas para girar" y se muestra un recuadro de foco. |
+| M1 | Carta semántica (`section` + `h3` + `ul`), agrupada en Clásicos / De la casa / Infusiones / Adicionales. |
+| M3 | La nav sobre el papel tiene su propia franja sólida, que entra con un corte. |
+| M4–M5 | Tokens de color, tipo, espacio, forma y motion en `:root`. |
+| M6 | Polvo, grano y haz se pausan con la portada fuera de vista. |
+| M7 | El `pointermove` sólo guarda coordenadas; rectángulos cacheados. |
+| M8 | Fuentes locales con `preload`; Pinyon Script sólo para la firma. |
+| B1–B4 | Código muerto fuera; `<head>` real con `lang`, descripción, Open Graph, JSON-LD y favicon; anclas únicas; dirección y @ enlazados. |
+
+### Eliminado y por qué
+| Qué | Por qué |
+|---|---|
+| Preloader con barra de % | Hacía esperar 6–15 s mirando un número. La apertura ahora es la luz. |
+| Máquina de escribir en script | Cliché de plantilla; repetía la bajada y dejaba un hueco intermitente bajo el título. |
+| Chip de precio rotativo | Lenguaje de e-commerce que competía con el logo y cambiaba sin que nadie lo pidiera. |
+| Palabra "DOREAR" fantasma detrás de los productos | Quinta repetición de la marca; en tablet se cortaba en "REAR". |
+| Eyebrow sobre el título | Patrón genérico. La descripción pasó a la bajada, donde se lee como frase. |
+| Degradé en el "DOREAR" del footer | Texto con degradé es decoración sin significado. Ahora es kraft sólido y ocupa todo el ancho. |
+| Flotación de vaso y bolsa | Contradecía la física de la escena. |
+| Desplazamiento de las filas de la carta al pasar el mouse | Sugería algo clickeable que no lo es. |
+| Horarios en el lateral de la carta y en el pie de la portada | Tercera y segunda repetición. |
+| "Hecho con dedicación" en el footer | Tercera aparición de "dedicación". |
+| Link "Horarios" de la nav | Apuntaba al mismo lugar que "Ubicación"; quedó un solo "Visitanos". |
+| Estilos del botón de Instagram, barra `#load`, perfiles de rendimiento, `window.__dorear`, contador de fps | Código muerto o de depuración. |
+
+### Falsos positivos del detector (verificados)
+`radial-halo` (polvo en suspensión, intencional) · `overused-font` Montserrat (es la tipografía impresa en el packaging renderizado; se mantiene por coherencia de marca y sólo para rótulos) · `low-contrast` en la firma y la palabra del footer (texto grande, ≥ 3:1) · `cramped-padding` en la portada (es full-bleed a propósito) · `flat-type-hierarchy` (lee el `h2` oculto para lectores de pantalla).
+
+### Decisiones pendientes
+1. **Lighthouse mobile ≥ 90**: postergar la lluvia de granos en mobile hasta el primer toque o scroll. Se pierde el "cierre" de la apertura en celulares.
+2. **Pastelería**: la bajada dice "Pastelería de autor" y la carta sólo tiene café.
+3. **"Adicionales: consultar"** convive con adicionales que sí tienen precio: ¿se aclara o se saca?
+4. **Feriados**: el estado abierto/cerrado sólo conoce el horario semanal.
+5. **Imagen para compartir (Open Graph) y dominio**: hace falta una imagen 1200×630 y la URL final para `og:image` y `canonical`.
+6. **Archivos `.blend`**: con ellos se puede re-renderizar con más contraste de luz (rim light) y generar una versión del giro para mobile nativa.

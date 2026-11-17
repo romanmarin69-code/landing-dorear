@@ -27,7 +27,7 @@ No se usan `ease`, `linear` (salvo en movimiento físico continuo, como la deriv
 | `--ease-settle` / `dorear.settle` | `cubic-bezier(.22, .9, .32, 1.02)` | Llegada con 2 % de sobrepaso: objetos con masa que se asientan (filas de la carta, letras del footer). |
 | `--ease-cut` / `dorear.cut` | `cubic-bezier(.76, 0, .24, 1)` | Simétrica y firme. Cortinas, cambios de estado de la nav, telones. |
 | `--ease-lift` / `dorear.lift` | `cubic-bezier(.5, 0, .75, 0)` | Aceleración pura. Lo que **se va** (salidas, anticipación). |
-| Spring (JS) | `k = 170, c = 26` (crítico ≈ 0,9) | Micro-interacciones con física: flecha del CTA y respuesta del giro al teclado. |
+| Física (JS) | impulso + retorno amortiguado `v += (objetivo − v)·min(1, dt·1,4)` | El giro: cada flecha del teclado suma 1,9 rad/s de impulso y el objeto vuelve solo a su velocidad propia; al soltar un arrastre conserva la inercia. |
 
 ## 3. Duraciones
 
@@ -49,20 +49,21 @@ No se usan `ease`, `linear` (salvo en movimiento físico continuo, como la deriv
 4. **Una sola idea por sección.** Portada: luz. Carta: escritura. Footer: firma. No se repite el mismo efecto en dos secciones.
 5. **Siempre desde un estado visible.** Sin JavaScript, todo se ve. Los estados iniciales "a oscuras" sólo existen si JS cargó (clase `.js` en `<html>`).
 6. **Solo `transform`, `opacity`, `filter` acotado y `clip-path`.** Nada que dispare layout dentro del loop.
-7. **Un solo reloj.** GSAP maneja su ticker, Lenis se engancha a ese ticker y el render de los productos corre en su propio `requestAnimationFrame` leyendo el scroll ya suavizado.
+7. **Un solo reloj.** El ticker de GSAP mueve todo: las timelines, Lenis y el loop del estudio (render de productos, física, parallax). Un cuadro, una pasada.
+8. **El loop no toca el DOM si nada cambió.** Cada estilo se escribe sólo cuando su valor difiere del anterior; lo que es puramente decorativo y cíclico (respiración del haz, polvo, grano) corre como animación CSS en el compositor.
 
 ## 5. Principios de cine aplicados
 
 | Principio | Dónde |
 |---|---|
-| Anticipación | Salida escalonada del copy antes del travelling. La flecha del CTA retrocede 2 px antes de avanzar. |
+| Anticipación | Salida escalonada del copy antes del travelling. La flecha del CTA retrocede 2 px antes de avanzar (keyframe con `--ease-settle`) mientras su filete se completa. |
 | Follow-through | El título sale último y con desenfoque. El giro sigue por inercia al soltar el arrastre (ya existía y se mantiene). |
 | Profundidad de campo | *Rack focus* hacia la carta: el estudio se desenfoca hasta 8 px mientras sube el papel (sólo en desktop y equipos de gama alta). |
-| Parallax por capas | Pared (×0,3), haz (×0,6), productos (×1), polvo cercano (×3), atado al cursor y al scroll. |
+| Parallax por capas | Desplazamiento máximo con el cursor en el borde de la pantalla: polvo lejano 12 px · pared 10 px · bolsa 18 px · vaso 40 px (más cerca de cámara) · haz 46 px · polvo cercano 120 px. El scroll suma el travelling sobre esto. |
 | Grano fílmico | Grano animado a 8 fps sobre el estudio y el footer, a 7 % de opacidad. La carta no lleva grano: tiene la textura propia del papel. |
 | Movimiento de cámara | Push-in de 14 % con desplazamiento al centro, en vez de un zoom plano. |
 | Revelado por máscaras | Título de la carta por líneas; letras del footer. |
-| Luz motivada | El haz se mueve con el cursor (la fuente de luz "respira") en vez de oscilar con un keyframe fijo. |
+| Luz motivada | La fuente se corre con el cursor (la escena no), y el haz respira lento (9 s, `--ease-cut`, ±18 px y 84–100 % de intensidad). |
 
 ## 6. Herramientas y por qué
 
@@ -78,18 +79,26 @@ No se usan `ease`, `linear` (salvo en movimiento físico continuo, como la deriv
 
 No es "apagar todo", es **otra versión** de la secuencia:
 
-- La apertura es un único fundido de 400 ms y el texto ya llega dorado.
-- Los productos aparecen quietos en la mejor vista. Arrastrar y usar las flechas sigue funcionando, sin auto-giro.
-- Los granos aparecen ya asentados, sin lluvia. No hay polvo ni grano animado (el grano queda estático).
+- El texto llega ya dorado; CTA, estado y pie aparecen con un único fundido de 400 ms.
+- Los productos aparecen quietos en su vista inicial. Arrastrar y usar las flechas sigue funcionando, sin auto-giro.
+- Los granos aparecen ya asentados, sin lluvia. No hay polvo, el grano queda estático y el haz no respira.
 - No hay parallax de cursor ni de scroll, travelling ni *rack focus*. La cortina de la carta sigue subiendo (es scroll del usuario, no animación).
-- Los revelados de la carta y del footer pasan a fundidos de opacidad de 300 ms. Hover y foco conservan sus transiciones de color, porque son feedback.
-- Sin Lenis.
+- La carta y el footer se muestran directamente, sin revelados. Hover y foco conservan sus transiciones, porque son feedback.
+- Sin Lenis; las anclas saltan sin desplazamiento suave.
 
 ## 8. Gama baja y mobile
 
 Gama baja = `saveData`, `deviceMemory ≤ 4`, `hardwareConcurrency ≤ 4` o caída sostenida bajo 45 fps.
 
-- Set de vistas `h-sm/` (66 %, −52 % de peso) en pantallas ≤ 820 px o en gama baja.
-- Máximo 320 granos (contra 540) y lluvia de 260.
+- Set de vistas `h-sm/` (66 %, −52 % de peso) en pantallas ≤ 820 px o en gama baja, con canvas a 1,5× de densidad como máximo.
+- Atlas de sombras de la bolsa al 50 % (`sh-sm.webp`: de 35 MB a 9 MB en la placa) y atlas de granos al 50 % (`b0/b1-sm.webp`).
+- Máximo 320 granos (contra 540), lluvia de 260, física con 2 subpasos por cuadro como máximo.
+- Con los granos quietos y sin interacción, se redibujan a 30 Hz.
 - 24 motas de polvo en lugar de 64. Sin *rack focus* (sólo oscurecimiento).
-- El ajuste dinámico existente (`beansLow`) se mantiene como red de seguridad.
+- El ajuste dinámico (`beansLow`) sigue como red de seguridad: si el cuadro supera 22 ms durante 3 s, baja la resolución de los granos y apaga el *rack focus*.
+
+## 9. Presupuesto de carga
+
+- El texto se pinta desde el primer cuadro, "sin luz" (`--dim-ink`): es el LCP y no depende de JS.
+- Las vistas, el flujo óptico, las sombras y los atlas se piden 150 ms después del primer pintado.
+- Una sola subida de textura a la GPU por cuadro. La carta y el footer se preparan cuando el navegador está libre (`requestIdleCallback`).

@@ -2,7 +2,6 @@
    Luz primero, contenido después, física al final. Un solo reloj: el ticker de GSAP mueve a Lenis y al estudio. */
 (function () {
 'use strict';
-clearTimeout(window.__mfb);
 var root = document.documentElement;
 var $ = function (s) { return document.querySelector(s); };
 var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
@@ -100,6 +99,7 @@ if (REDUCED) {
   // el producto entra segundo: nunca junto con el título, aunque las vistas ya estén en caché
   Promise.all([D.ready, wait(.6)]).then(light);
 }
+clearTimeout(window.__mfb);   // la apertura quedó armada: ya no hace falta la red de seguridad del <head>
 
 if (REDUCED) { root.classList.add('is-static'); document.fonts && document.fonts.ready.then(function () { ScrollTrigger.refresh(); }); return; }
 

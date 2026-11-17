@@ -355,7 +355,7 @@ if (!REDUCED) {
 }
 
 /* ---------- control: cursor, arrastre con inercia, teclado ---------- */
-var stage = $('#stage'), hero = $('#hero'), mx = 0, my = 0, cmx = 0, cmy = 0, sp = 0, csp = 0, drag = null, T = 0, lastScrollY = scrollY, scrollV = 0;
+var stage = $('#stage'), hero = $('#hero'), mx = 0, my = 0, cmx = 0, cmy = 0, sp = 0, csp = 0, drag = null, lastScrollY = scrollY, scrollV = 0;
 var lastMove = null, KICK = 1.9; // impulso de giro por tecla (rad/s); luego vuelve a su velocidad propia con amortiguacion
 addEventListener('pointermove', function (e) {
   if (!REDUCED) { mx = e.clientX / innerWidth - .5; my = e.clientY / innerHeight - .5; }
@@ -416,7 +416,7 @@ function frame() {
   if (!beansLow && raining) { slowT = dt > .0222 ? slowT + dt : Math.max(0, slowT - dt * 2); if (slowT > 3) { beansLow = true; MAXB = 320; D.dof = false; size(); } }
   if ((rectT -= dt) <= 0) { rects(); rectT = .25; }
   if (lastMove) { var lm = lastMove; lastMove = null; if (!drag) { stage.classList.toggle('is-grab', cup.hit(lm.x, lm.y) || bag.hit(lm.x, lm.y)); if (scrollY < innerHeight && !REDUCED) push(lm.x, lm.y, lm.t); } }
-  T += dt; var kk = 1 - Math.exp(-dt * 3.6); cmx += (mx - cmx) * kk; cmy += (my - cmy) * kk;
+  var kk = 1 - Math.exp(-dt * 3.6); cmx += (mx - cmx) * kk; cmy += (my - cmy) * kk;
   var ks = D.lenis ? 1 : 1 - Math.exp(-dt * 7); csp += (sp - csp) * ks;  // con Lenis el scroll ya llega suavizado
   var sv = (scrollY - lastScrollY) / Math.max(dt, .001); lastScrollY = scrollY; scrollV += (sv - scrollV) * .2;
   OB.forEach(function (o, j) {
