@@ -25,11 +25,20 @@ var css = getComputedStyle(root), CREAM = css.getPropertyValue('--cream').trim()
     } catch (_) { return; }
     var d = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(p.weekday), m = (+p.hour % 24) * 60 + (+p.minute);
     if (d < 0) return;
+    // sólo se anuncia cuando está abierto; cerrado no se muestra nada (los horarios completos están en el pie)
     var h = hoursOf(d), open = m >= h[0] && m < h[1];
     el.classList.toggle('is-open', open);
-    txt.textContent = open ? 'Abierto · hasta las ' + hm(h[1]) : m < h[0] ? 'Cerrado · abrimos a las ' + hm(h[0]) : 'Cerrado · mañana desde las ' + hm(hoursOf((d + 1) % 7)[0]);
+    el.hidden = !open;
+    if (open) txt.textContent = 'Abierto · hasta las ' + hm(h[1]);
   }
   tick(); setInterval(tick, 60000);
+})();
+
+/* ---------- mapa: no captura la rueda ni el arrastre hasta que se lo activa ---------- */
+(function mapa() {
+  var f = $('#mapFrame'), v = $('#mapVeil'); if (!f || !v) return;
+  v.addEventListener('click', function () { f.classList.add('is-live'); var ifr = f.querySelector('iframe'); if (ifr) ifr.focus(); });
+  f.addEventListener('pointerleave', function (e) { if (e.pointerType === 'mouse') f.classList.remove('is-live'); });
 })();
 
 var hintT = $('#hintT'), stage = $('#stage');
@@ -131,15 +140,33 @@ $$('.grp__t').forEach(function (t) {
 // cada fila: primero se dibuja su filete, enseguida suben nombre y precio (sólo transform)
 var items = $$('.item');
 items.forEach(function (i) { var r = document.createElement('i'); r.className = 'rule'; r.setAttribute('aria-hidden', 'true'); i.appendChild(r); i.classList.add('is-ruled'); });
+// el filete se dibuja en dorado, como una línea de fuego, y se enfría al tono del papel
+var GOLD = css.getPropertyValue('--gold').trim() || '#E0A526', RULE = 'rgba(107,74,34,0.24)';   // = --rule-paper (GSAP interpola rgba clásico)
+gsap.set(items.map(function (i) { return i.lastElementChild; }), { backgroundColor: GOLD });
 gsap.set(items.map(function (i) { return i.firstElementChild; }), { yPercent: 100 });
 ScrollTrigger.batch(items, {
   start: 'top 95%', once: true,
   onEnter: function (b) {
     gsap.to(b.map(function (i) { return i.lastElementChild; }), { scaleX: 1, duration: .9, ease: 'gild', stagger: .055 });
+    gsap.to(b.map(function (i) { return i.lastElementChild; }), { backgroundColor: RULE, duration: 1.4, ease: 'cut', stagger: .055, delay: .75 });
     gsap.to(b.map(function (i) { return i.firstElementChild; }), { yPercent: 0, duration: .9, ease: 'settle', stagger: .055, delay: .1 });
   }
 });
 gsap.from('.carta__note', { opacity: 0, y: 12, duration: .9, ease: 'gild', scrollTrigger: { trigger: '.carta__note', start: 'top 95%', once: true } });
+
+/* ---------- el mapa se abre como un visor: el recorte crece desde el centro, las esquinas encuadran ---------- */
+var frame = $('.map__frame');
+if (frame) {
+  gsap.set(frame, { clipPath: 'inset(14% 10% 14% 10% round 6px)' });
+  gsap.set('.map__tick', { opacity: 0, scale: .6 });
+  gsap.set('.map__card', { opacity: 0, y: 24 });
+  ScrollTrigger.create({ trigger: frame, start: 'top 85%', once: true, onEnter: function () {
+    gsap.timeline({ defaults: { ease: 'gild' } })
+      .to(frame, { clipPath: 'inset(0% 0% 0% 0% round 6px)', duration: 1.4 })
+      .to('.map__tick', { opacity: 1, scale: 1, duration: .7, stagger: .06, ease: 'settle' }, .6)
+      .to('.map__card', { opacity: 1, y: 0, duration: .9 }, .45);
+  } });
+}
 
 /* ---------- plano 6: firma ---------- */
 gsap.timeline({ scrollTrigger: { trigger: '.foot', start: 'top 75%', end: 'bottom bottom', scrub: .8 } })

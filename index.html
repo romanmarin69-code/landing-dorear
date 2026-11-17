@@ -63,7 +63,7 @@
     <div class="layer grain" aria-hidden="true" style="z-index:3"></div>
 
     <div class="hero__copy" id="copy">
-      <h1 class="h1" id="hero-t"><span class="ln"><span>Que espere</span></span><span class="ln"><span>todo.</span></span></h1>
+      <h1 class="h1" id="hero-t"><span class="ln"><span>Que espere</span></span><span class="ln"><span>todo<span class="ember">.</span></span></span></h1>
       <div data-out><p class="lead" data-gild>Pastelería de autor y café de especialidad, en Puerto Madero. <span class="nb">Este ratito es tuyo.</span></p></div>
       <div data-out><div class="hero__act" data-in>
         <a class="cta label" href="#carta"><span>Ver la carta</span><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.25" aria-hidden="true"><path d="M4.5 13.5 13.5 4.5M6.5 4.5h7v7"/></svg></a>
@@ -141,10 +141,21 @@
   <h2 class="sr" id="visitanos-t">Visitanos</h2>
   <div class="layer grain" aria-hidden="true"></div>
   <div class="foot__cols grid">
-    <div><h3 class="label">Encontranos</h3><p><a class="u" href="https://maps.google.com/?q=Rosario+Vera+Pe%C3%B1aloza+460,+Puerto+Madero,+CABA" target="_blank" rel="noopener">Rosario Vera Peñaloza 460<br>Puerto Madero, CABA</a></p></div>
     <div><h3 class="label">Horarios</h3><p>Lunes a viernes · 7:30 a 20 h<br>Sábados y domingos · 8:30 a 19 h</p></div>
     <div><h3 class="label">Seguinos</h3><p><a class="u" href="https://www.instagram.com/dorearcafe.ar/" target="_blank" rel="noopener">@dorearcafe.ar<span class="sr"> en Instagram (se abre en otra pestaña)</span></a></p></div>
   </div>
+  <figure class="map" id="mapa">
+    <div class="map__frame" id="mapFrame">
+      <iframe class="map__embed" title="Mapa: Dorear en Rosario Vera Peñaloza 460, Puerto Madero" src="https://www.google.com/maps?q=Rosario+Vera+Pe%C3%B1aloza+460,+Puerto+Madero,+Buenos+Aires&amp;z=16&amp;hl=es&amp;output=embed" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen></iframe>
+      <button class="map__veil label" type="button" id="mapVeil"><span>Tocá para mover el mapa</span></button>
+      <i class="map__tick map__tick--tl" aria-hidden="true"></i><i class="map__tick map__tick--tr" aria-hidden="true"></i><i class="map__tick map__tick--bl" aria-hidden="true"></i><i class="map__tick map__tick--br" aria-hidden="true"></i>
+    </div>
+    <figcaption class="map__card">
+      <h3 class="label">Encontranos</h3>
+      <p>Rosario Vera Peñaloza 460<br>Puerto Madero, CABA</p>
+      <a class="btn label" href="https://www.google.com/maps/dir/?api=1&amp;destination=Rosario+Vera+Pe%C3%B1aloza+460,+Puerto+Madero,+CABA" target="_blank" rel="noopener"><span>Cómo llegar</span><svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M4.5 13.5 13.5 4.5M6.5 4.5h7v7"/></svg><span class="sr"> (abre Google Maps)</span></a>
+    </figcaption>
+  </figure>
   <p class="foot__word" aria-hidden="true"><span><span>D</span></span><span><span>O</span></span><span><span>R</span></span><span><span>E</span></span><span><span>A</span></span><span><span>R</span></span></p>
   <div class="foot__sign"><span class="label">Elaboración artesanal, 100 % casera</span><span class="sig">Agustina Ramirez</span></div>
 </footer>
