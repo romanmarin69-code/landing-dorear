@@ -17,6 +17,20 @@ Referencia de tono: un plano de mesa de producto en un estudio, con una sola luz
 | **5. La carta** | sección | El título se revela por líneas detrás de una máscara. Cada grupo de la carta entra cuando llega al viewport: primero se **dibuja** el filete inferior de cada fila y enseguida suben nombre y precio. | Ritmo de lectura: una fila tras otra, como alguien que escribe la pizarra. |
 | **6. Firma** | footer | "DOREAR" se arma letra por letra mientras llegás al final (atado al scroll) y la firma aparece última. | El cierre de los créditos. |
 
+### El acento: la chispa (`#E0A526`)
+
+Un solo color de acento, usado como **chispa de luz**: en puntos, flechas, filetes y anillos de foco; nunca en superficies grandes ni en texto corrido (la única superficie dorada es el botón "Cómo llegar").
+
+| Dónde | Por qué |
+|---|---|
+| Punto final de "todo." | La brasa: arde desde el primer cuadro, antes de que el título se dore. Es lo primero que ve el ojo. |
+| Flecha y subrayado del CTA, flecha de la pista de giro, subrayados de enlaces | Lo que se puede tocar lleva chispa. |
+| Punto de "Abierto" | Late despacio (2,8 s): el local está encendido. |
+| Filetes de la carta | Se dibujan en dorado y se enfrían al tono del papel: una línea de fuego. |
+| Segmento sobre títulos de grupo y firma | Marca de inicio, como el corte de una pizarra. |
+| Marcas de esquina del mapa, botón "Cómo llegar" | Encuadre de visor; la acción final de la página. |
+| Anillo de foco, selección, barra de scroll | Superficies del navegador también llevan la marca. Sobre papel el foco usa `--roast-ink` (contraste ≥ 3:1). |
+
 ## 2. Curvas propias
 
 No se usan `ease`, `linear` (salvo en movimiento físico continuo, como la deriva del polvo) ni `ease-in-out` por defecto.
