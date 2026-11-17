@@ -17,12 +17,19 @@ var LOW = !!conn.saveData || (N_.deviceMemory && N_.deviceMemory <= 4) || (N_.ha
 var DPR = Math.min(devicePixelRatio || 1, 2);
 // set de vistas: 66 % en pantallas chicas o equipos modestos sin pantalla densa
 var SET = (MOB.matches || conn.saveData || (LOW && DPR < 1.5)) ? 'h-sm' : 'h';
+if (SET === 'h-sm') DPR = Math.min(DPR, 1.5);   // más densidad que la textura no suma nitidez, sólo costo
 
 var seed = 7; function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
 
 /* Estado compartido con motion.js. expo: exposicion de los productos 0..1; spin: cuanto del auto-giro esta activo. */
 var D = window.Dorear = { expo: 0, spin: 0, beam: 0, lenis: false, low: LOW, reduced: REDUCED };
 var readyRes; D.ready = new Promise(function (r) { readyRes = r; });
+// las descargas pesadas (vistas, flujo, atlas) arrancan después del primer cuadro pintado: el texto no compite con ellas
+var afterPaint = new Promise(function (r) {
+  var done = false, go = function () { if (!done) { done = true; setTimeout(r, 150); } };
+  try { new PerformanceObserver(function (l) { if (l.getEntriesByName('first-contentful-paint').length) go(); }).observe({ type: 'paint', buffered: true }); } catch (_) {}
+  setTimeout(go, 1500);   // red de seguridad si el navegador no reporta pintados
+});
 
 var META = {"cup":{"N":96,"P":192,"pos":[0,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,56,58,60,62,64,66,68,70,72,74,76,78,80,82,84,86,88,90,92,94,96,98,100,102,104,106,108,110,112,114,116,118,120,122,124,126,128,130,132,134,136,138,140,142,144,146,148,150,152,154,156,158,160,162,164,166,168,170,172,174,176,178,180,182,184,186,188,190],"W":1000,"H":1250,"x":16,"y":160,"w":980,"h":1080,"ox":140,"oy":132,"ow":720,"oh":1012,"hit":[0.173,0.1336,0.826,0.888],"fw":90,"fh":127,"fc":16,"fW":1440,"fH":762,"NS":1,"sw":245,"sh":270,"sc":1,"sW":245,"sH":270},"bag":{"N":123,"P":192,"pos":[0,1,2,3,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,58,60,62,64,66,68,70,72,74,76,78,80,82,84,86,88,90,91,92,93,94,95,96,98,100,102,104,106,108,110,112,114,116,118,120,122,124,126,128,130,132,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,154,156,158,160,162,164,166,168,170,172,174,176,178,180,182,184,186,187,188,189,190,191],"W":1000,"H":1250,"x":20,"y":136,"w":976,"h":1108,"ox":228,"oy":112,"ow":544,"oh":1052,"hit":[0.261,0.1152,0.738,0.9032],"fw":68,"fh":132,"fc":16,"fW":1088,"fH":1056,"NS":123,"sw":244,"sh":277,"sc":16,"sW":3904,"sH":2216}};
 
@@ -45,6 +52,9 @@ function toBitmap(blob) { return createImageBitmap(blob, BMO).catch(function () 
 
 function seq(id, name, autoSpeed, startAngle) {
   var m = META[name], N = m.N, P = m.P, pos = m.pos, cv = document.getElementById(id), K = P / TAU, lut = [];
+  // atlas de sombras de la bolsa (3904×2216, 35 MB en la placa): en el set chico va al 50 %, tile por tile
+  var shFile = m.NS > 1 && SET === 'h-sm' ? 'sh-sm.webp' : 'sh.webp';
+  if (shFile === 'sh-sm.webp') m = Object.assign({}, m, { sw: 122, sh: 139, sW: 1952, sH: 1112 });
   for (var li = 0, lj = 0; lj < P; lj++) { while (li + 1 < N && pos[li + 1] <= lj) li++; lut[lj] = li; }
   var tex = new Array(N), ready = [], texN = 0;
   var o = { cv: cv, a: startAngle, v: 0, auto: autoSpeed, drag: false, last: '', lost: false };
@@ -75,16 +85,19 @@ function seq(id, name, autoSpeed, startAngle) {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     return tx;
   }
-  if (gl) {
-    [['flow.webp', function (t) { flowTex = t; }], ['sh.webp', function (t) { shTex = t; }]].forEach(function (a) {
-      var im = new Image(); im.onload = function () { a[1](mk(im)); o.last = ''; }; im.src = name + '/' + a[0];
+  // flujo y sombras son datos, no color: se decodifican fuera del hilo principal y sin premultiplicar
+  if (gl) afterPaint.then(function () {
+    [['flow.webp', function (t) { flowTex = t; }], [shFile, function (t) { shTex = t; }]].forEach(function (a) {
+      fetch(name + '/' + a[0]).then(function (r) { return r.blob(); })
+        .then(function (b) { return createImageBitmap(b, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }); })
+        .then(function (bm) { a[1](mk(bm)); try { bm.close(); } catch (_) {} o.last = ''; }, function () {});
     });
-  }
+  });
   // descarga y decodificacion fuera del hilo principal; el orden sigue el sentido del giro desde la vista inicial
   var b0 = lut[Math.floor(((startAngle * K) % P + P) % P)], order = [], dq = autoSpeed >= 0 ? 1 : -1;
   for (var k = 0; k < N; k++) order.push(md(b0 + dq * k));
   var act = 0;
-  (function pump() {
+  afterPaint.then(function pump() {
     while (act < 6 && order.length) {
       (function (i) {
         act++;
@@ -94,14 +107,16 @@ function seq(id, name, autoSpeed, startAngle) {
           .then(function () { act--; pump(); });
       })(order.shift());
     }
-  })();
+  });
   // subida a la placa: pocas por cuadro, para no trabar el hilo principal
   o.pump = function (n) {
+    var did = false;
     while (n-- > 0 && ready.length) {
       var r = ready.shift(), i = r[0], b = r[1];
       if (gl) { tex[i] = mk(b); try { b.close(); } catch (_) {} } else tex[i] = b;
-      texN++; o.last = '';
+      texN++; o.last = ''; did = true;
     }
+    return did;
   };
   var cx = gl ? null : cv.getContext('2d');
   function near(i) { if (tex[i]) return i; for (var d = 1; d <= N / 2; d++) { if (tex[md(i + d)]) return md(i + d); if (tex[md(i - d)]) return md(i - d); } return -1; }
@@ -152,11 +167,14 @@ function unproj(px, py) {
 var BX = 1.47, BY = .82, BH = 6.0;          // base de la bolsa (semiancho, semiprofundidad, alto)
 var R = .078, ZS = 1.65, G = 34;            // radio del grano, aplastamiento vertical, gravedad (camara lenta)
 var NY = 24, NR = 16, CELL = 96, SPAN = .30; // atlas: 24 giros x 16 vuelcos, cada celda cubre 0,30 m
-var MAXB = LOW || MOB.matches ? 320 : 540, RAIN = LOW || MOB.matches ? 260 : 500;
+var MAXB = LOW || MOB.matches ? 320 : 540, RAIN = LOW || MOB.matches ? 260 : 500, MAXSUB = LOW || MOB.matches ? 2 : 4;
 var atlas = [null, null], atlasRes, atlasReady = new Promise(function (r) { atlasRes = r; });
-Promise.all(['beans/b0.webp', 'beans/b1.webp'].map(function (u, i) {
+// en el set chico los granos miden ~12 px: atlas a la mitad (celdas de 48 px), 1/3 del peso y 1/4 de memoria
+if (SET === 'h-sm') CELL = 48;
+afterPaint.then(function () { return Promise.all(['beans/b0', 'beans/b1'].map(function (u, i) {
+  u += CELL === 48 ? '-sm.webp' : '.webp';
   return fetch(u).then(function (r) { return r.blob(); }).then(function (b) { return createImageBitmap(b); }).then(function (b) { atlas[i] = b; });
-})).then(atlasRes, function () {});
+})); }).then(atlasRes, function () {});
 var shadowSpr = (function () {
   var c = document.createElement('canvas'); c.width = c.height = 64; var g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
   gr.addColorStop(0, 'rgba(0,0,0,.75)'); gr.addColorStop(.45, 'rgba(0,0,0,.42)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return c;
@@ -273,7 +291,7 @@ function burst(x, y) {
 }
 
 // dibujo: atras de la bolsa / delante de la bolsa, ordenados por distancia a la camara
-var bBack = $('#beansBack'), bFront = $('#beansFront'), gB = bBack.getContext('2d'), gF = bFront.getContext('2d'), bScale = 1, bW = 0, bH = 0, beansDirty = true, sideMem = [];
+var bBack = $('#beansBack'), bFront = $('#beansFront'), gB = bBack.getContext('2d'), gF = bFront.getContext('2d'), bScale = 1, bW = 0, bH = 0, beansDirty = true;
 function behindBag(b) {
   var c = Math.cos(bagAng), s = Math.sin(bagAng), ax = CAM.c[0], ay = CAM.c[1];
   var lx0 = ax * c + ay * s, ly0 = -ax * s + ay * c, lx1 = b.x * c + b.y * s, ly1 = -b.x * s + b.y * c, t0 = 0, t1 = 1, dx = lx1 - lx0, dy = ly1 - ly0;
@@ -283,27 +301,44 @@ function behindBag(b) {
   }
   return t1 < .999;
 }
+/* Capa estática: los granos dormidos lejos de la base y fuera de la zona que la bolsa puede tapar se pintan una
+   sola vez en un lienzo aparte. Por cuadro sólo se dibujan los que pueden cambiar (cerca de la bolsa o en movimiento).
+   Con todo asentado, el costo baja de ~600 drawImage por cuadro a 1 + los pocos granos vecinos a la base. */
+var sCv = document.createElement('canvas'), gS = sCv.getContext('2d'), staticDirty = true;
+function isStatic(b) { return b.sleep && !b.dying && Math.hypot(b.x, b.y) > 2.05 && !(b.y > -1 && Math.abs(b.x) < 1.8); }
+function depthList(arr) {
+  var list = [];
+  for (var i = 0; i < arr.length; i++) { var b = arr[i]; list.push([proj(b.x, b.y, b.z - .046 * Math.cos(b.roll)), proj(b.x, b.y, 0), b]); }
+  return list.sort(function (a, c) { return c[0][2] - a[0][2]; });
+}
+function paintBean(g, it) {
+  var p = it[0], f = it[1], b = it[2], ox = .08 * bScale * 1000, oy = .15 * bScale * 1250;
+  var px = p[0] * bScale + ox, py = p[1] * bScale + oy, size = SPAN * CAM.s / p[2] * bScale * b.sc;
+  // sombra de contacto (la luz principal viene de adelante a la izquierda)
+  var h = Math.max(0, b.z - R / ZS), sa = Math.max(0, .62 - h * .55) * b.fade;
+  if (sa > .01) { var sw = size * .95 * (1 + h * .6), sh = sw * .34; g.globalAlpha = sa; g.drawImage(shadowSpr, f[0] * bScale + ox - sw / 2 + size * .08, f[1] * bScale + oy - sh / 2 - size * .02, sw, sh); }
+  var yi = ((Math.round(b.yaw / TAU * NY) % NY) + NY) % NY, ri = ((Math.round(b.roll / TAU * NR) % NR) + NR) % NR;
+  g.globalAlpha = b.fade; g.drawImage(atlas[b.v], ri * CELL, yi * CELL, CELL, CELL, px - size / 2, py - size / 2, size, size);
+}
 function drawBeans() {
   if (!atlas[0] || !atlas[1]) return;
-  var dirty = beansDirty, i0, bb0, sd;
-  for (i0 = 0; i0 < beans.length; i0++) { bb0 = beans[i0]; if (bb0.born > 0) continue; if (!bb0.sleep || bb0.dying) { dirty = true; break; } }
-  if (!dirty) { for (i0 = 0; i0 < beans.length; i0++) { bb0 = beans[i0]; if (bb0.born > 0) continue; sd = behindBag(bb0); if (sideMem[i0] !== sd || bb0.side !== sd) { dirty = true; break; } } }
+  var dirty = beansDirty, dyn = [], stat = [], i, b;
+  for (i = 0; i < beans.length; i++) {
+    b = beans[i]; if (b.born > 0) continue;
+    var st = isStatic(b); if (st !== b.st) { b.st = st; staticDirty = true; }
+    (st ? stat : dyn).push(b);
+  }
+  if (staticDirty) {
+    staticDirty = false; dirty = true;
+    gS.setTransform(1, 0, 0, 1, 0, 0); gS.clearRect(0, 0, sCv.width, sCv.height);
+    depthList(stat).forEach(function (it) { paintBean(gS, it); }); gS.globalAlpha = 1;
+  }
+  if (!dirty) for (i = 0; i < dyn.length; i++) { b = dyn[i]; if (!b.sleep || b.dying || behindBag(b) !== b.side) { dirty = true; break; } }
   if (!dirty) return; beansDirty = false;
   gB.setTransform(1, 0, 0, 1, 0, 0); gF.setTransform(1, 0, 0, 1, 0, 0); gB.clearRect(0, 0, bW, bH); gF.clearRect(0, 0, bW, bH);
-  var list = []; for (var i = 0; i < beans.length; i++) { var b = beans[i]; if (b.born > 0) continue; var p = proj(b.x, b.y, b.z - .046 * Math.cos(b.roll)), f = proj(b.x, b.y, 0); list.push([p[2], b, p, f]); }
-  list.sort(function (a, b) { return b[0] - a[0]; });
-  var ox = .08 * bScale * 1000, oy = .15 * bScale * 1250;
-  for (var k = 0; k < list.length; k++) {
-    var b = list[k][1], p = list[k][2], f = list[k][3], g = behindBag(b) ? gB : gF;
-    b.side = g === gB; var px = p[0] * bScale + ox, py = p[1] * bScale + oy, size = SPAN * CAM.s / p[2] * bScale * b.sc;
-    // sombra de contacto (la luz principal viene de adelante a la izquierda)
-    var h = Math.max(0, b.z - R / ZS), sa = Math.max(0, .62 - h * .55) * b.fade;
-    if (sa > .01) { var sw = size * .95 * (1 + h * .6), sh = sw * .34; g.globalAlpha = sa; g.drawImage(shadowSpr, f[0] * bScale + ox - sw / 2 + size * .08, f[1] * bScale + oy - sh / 2 - size * .02, sw, sh); }
-    var yi = ((Math.round(b.yaw / TAU * NY) % NY) + NY) % NY, ri = ((Math.round(b.roll / TAU * NR) % NR) + NR) % NR;
-    g.globalAlpha = b.fade; g.drawImage(atlas[b.v], ri * CELL, yi * CELL, CELL, CELL, px - size / 2, py - size / 2, size, size);
-  }
+  gF.globalAlpha = 1; gF.drawImage(sCv, 0, 0);
+  depthList(dyn).forEach(function (it) { var bb = it[2], back = behindBag(bb); bb.side = back; paintBean(back ? gB : gF, it); });
   gB.globalAlpha = gF.globalAlpha = 1;
-  for (var s2 = 0; s2 < beans.length; s2++) sideMem[s2] = beans[s2].born > 0 ? undefined : beans[s2].side;
 }
 
 /* ---------- atmosfera: polvo suspendido en tres profundidades ---------- */
@@ -350,19 +385,19 @@ function size() {
   var d = DPR;
   OB.forEach(function (o) { var r = o.cv.getBoundingClientRect(); o.resize(Math.min(Math.round(r.width * d), 1000)); });
   var r = bag.cv.getBoundingClientRect(), bd = beansLow ? 1 : d; bScale = r.width * bd / 1000;
-  bW = Math.round(r.width * 1.16 * bd); bH = Math.round(r.height * 1.25 * bd); bBack.width = bFront.width = bW; bBack.height = bFront.height = bH;
-  beansDirty = true; rects();
+  bW = Math.round(r.width * 1.16 * bd); bH = Math.round(r.height * 1.25 * bd); bBack.width = bFront.width = sCv.width = bW; bBack.height = bFront.height = sCv.height = bH;
+  beansDirty = staticDirty = true; rects();
 }
 function rects() { OB.forEach(function (o) { o.rect = o.cv.getBoundingClientRect(); }); }
 addEventListener('resize', size);
 
 var cupEl = $('#cup'), bagEl = $('#bagbox'), wall = $('#wall'), beam = $('#beam'), dim = $('#dim');
-var prevLook = [null, null], acc = 0, nextDrop = 5, lastFilter = '', lastOp = '', heroOff = false, rectT = 0;
+var prevLook = [null, null], acc = 0, nextDrop = 5, heroOff = false, rectT = 0, rainT = 0;
 D.dof = !LOW && !REDUCED; // rack focus sólo donde sobra GPU
 
 D.rain = function () {
   return atlasReady.then(function () {
-    if (raining) return; raining = true;
+    if (raining) return; raining = true; rainT = performance.now();
     if (REDUCED) { rain(RAIN, 0); beans.forEach(function (b) { b.born = 0; b.z = R / ZS + rnd() * .05; }); for (var i = 0; i < 900; i++) step(1 / 120); }
     else rain(RAIN, 3.4);
     beansDirty = true;
@@ -371,7 +406,9 @@ D.rain = function () {
 
 function frame() {
   var now = performance.now(), dt = Math.min(.05, (now - (frame.t || now)) / 1000); frame.t = now;
-  cup.pump(2); bag.pump(2);
+  // una sola subida de textura por cuadro, alternando objetos: nunca una tarea larga en el hilo principal
+  var first = (frame.k = !frame.k) ? cup : bag;
+  if (!first.pump(1)) (first === cup ? bag : cup).pump(1);
   if (readyRes && cup.some() && bag.some()) { readyRes(); readyRes = null; }
   var off = scrollY > roomH + innerHeight * 1.05;          // la portada ya no se ve: no se dibuja
   if (off !== heroOff) { heroOff = off; hero.classList.toggle('is-off', off); }
@@ -386,12 +423,13 @@ function frame() {
     if (!o.drag) { var target = REDUCED ? 0 : o.auto * D.spin; o.v += (target - o.v) * Math.min(1, dt * 1.4); o.a += o.v * dt; }
     var look = REDUCED ? 0 : cmx * (j ? .55 : .9) + csp * Math.PI * (j ? -.6 : .75);
     if (o.drag && o.pl !== undefined) o.a -= look - o.pl; o.pl = look;
-    var shown = o.draw(o.a + look);
+    var shown = D.expo > 0 ? o.draw(o.a + look) : o.a + look;   // invisible: no se dibuja
     if (j === 1) { bagW = prevLook[1] === null ? 0 : (shown - prevLook[1]) / Math.max(dt, .001); bagAng = shown; }
     prevLook[j] = shown;
   });
   if (raining && !REDUCED) {
-    acc += dt; var ns = 0; while (acc >= 1 / 120 && ns < 4) { step(1 / 120); acc -= 1 / 120; ns++; }
+    acc += dt; var ns = 0; while (acc >= 1 / 120 && ns < MAXSUB) { step(1 / 120); acc -= 1 / 120; ns++; }
+    if (ns === MAXSUB) acc = Math.min(acc, 1 / 120);   // si no da el tiempo, la física va en cámara lenta en vez de acumular deuda
     nextDrop -= dt;
     if (nextDrop <= 0 && scrollY < innerHeight) {
       nextDrop = 3 + rnd() * 3;
@@ -401,30 +439,32 @@ function frame() {
     var alive = 0; for (var i = beans.length - 1; i >= 0; i--) { var b = beans[i]; if (b.dying) { b.fade -= dt; if (b.fade <= 0) beans.splice(i, 1); } else alive++; }
     if (alive > MAXB) { var far = null, fd = 0; for (var i2 = 0; i2 < beans.length; i2++) { var b2 = beans[i2]; if (b2.dying || b2.born > 0) continue; var dd = Math.hypot(b2.x * .8, b2.y); if (dd > fd) { fd = dd; far = b2; } } if (far) far.dying = true; }
   }
-  if (raining) drawBeans();
+  // en equipos chicos, con los granos casi quietos y sin interacción, se redibujan a 30 Hz
+  var calm = (LOW || MOB.matches) && !drag && now - (cursorT || 0) > 600 && now - rainT > 5000;
+  if (raining && (!calm || (frame.k))) drawBeans();
+  // Sólo se escribe en el DOM lo que cambió: con el cursor quieto y sin scroll, el loop no toca estilos.
   if (!REDUCED) {
-    dgs[0].style.transform = 'translate3d(' + (-cmx * 12).toFixed(1) + 'px,' + (-cmy * 6).toFixed(1) + 'px,0)';
-    dgs[1].style.transform = 'translate3d(' + (-cmx * 32).toFixed(1) + 'px,' + (-cmy * 16).toFixed(1) + 'px,0)';
-    dgs[2].style.transform = 'translate3d(' + (-cmx * 120).toFixed(1) + 'px,' + (-cmy * 60).toFixed(1) + 'px,0)';
+    css(dgs[0], 'transform', 'translate3d(' + (-cmx * 12).toFixed(1) + 'px,' + (-cmy * 6).toFixed(1) + 'px,0)');
+    css(dgs[1], 'transform', 'translate3d(' + (-cmx * 32).toFixed(1) + 'px,' + (-cmy * 16).toFixed(1) + 'px,0)');
+    css(dgs[2], 'transform', 'translate3d(' + (-cmx * 120).toFixed(1) + 'px,' + (-cmy * 60).toFixed(1) + 'px,0)');
   }
-  // camara: travelling de acercamiento; los productos van al centro y crecen
-  var mob = MOB.matches, e = REDUCED ? 0 : csp * csp * (3 - 2 * csp);
-  stage.style.transform = mob ? 'translate3d(0,' + (-e * 10).toFixed(2) + 'svh,0) scale(' + (1 + e * .1).toFixed(4) + ')' : 'translate3d(' + (-e * 9).toFixed(2) + 'vw,' + (-e * 2).toFixed(2) + 'vh,0) scale(' + (1 + e * .14).toFixed(4) + ')';
-  cupEl.style.transform = 'translate3d(' + (-cmx * 40).toFixed(1) + 'px,' + (-cmy * 40).toFixed(1) + 'px,0) rotate(' + (cmx * 3).toFixed(2) + 'deg)';
-  bagEl.style.transform = 'translate3d(' + (-cmx * 18).toFixed(1) + 'px,' + (-cmy * 18).toFixed(1) + 'px,0) rotate(' + (cmx * 1.5).toFixed(2) + 'deg)';
-  wall.style.transform = 'translate3d(' + (cmx * 10).toFixed(1) + 'px,' + (cmy * 8 - e * 20).toFixed(1) + 'px,0) scale(1.04)';
-  // la luz respira y sigue apenas al cursor: la fuente se mueve, no la escena
-  var bx = REDUCED ? 0 : cmx * 46 + Math.sin(T * .23) * 18, bo = REDUCED ? 1 : .86 + Math.sin(T * .31 + 1) * .14;
-  beam.style.transform = 'translate3d(' + bx.toFixed(1) + 'px,0,0)'; beam.style.opacity = (D.beam * bo).toFixed(3);
-  // exposicion de los productos + cambio de foco cuando sube la carta
-  var over = Math.max(0, Math.min(1, (scrollY - roomH) / innerHeight)), ex = D.expo;
-  var op = Math.min(1, ex * 3).toFixed(3);
-  if (op !== lastOp) { lastOp = op; cupEl.style.opacity = bagEl.style.opacity = op; }
+  // cámara: travelling de acercamiento; los productos van al centro y crecen
+  var e = REDUCED ? 0 : csp * csp * (3 - 2 * csp);
+  css(stage, 'transform', MOB.matches ? 'translate3d(0,' + (-e * 10).toFixed(2) + 'svh,0) scale(' + (1 + e * .1).toFixed(4) + ')' : 'translate3d(' + (-e * 9).toFixed(2) + 'vw,' + (-e * 2).toFixed(2) + 'vh,0) scale(' + (1 + e * .14).toFixed(4) + ')');
+  css(cupEl, 'transform', 'translate3d(' + (-cmx * 40).toFixed(1) + 'px,' + (-cmy * 40).toFixed(1) + 'px,0) rotate(' + (cmx * 3).toFixed(2) + 'deg)');
+  css(bagEl, 'transform', 'translate3d(' + (-cmx * 18).toFixed(1) + 'px,' + (-cmy * 18).toFixed(1) + 'px,0) rotate(' + (cmx * 1.5).toFixed(2) + 'deg)');
+  css(wall, 'transform', 'translate3d(' + (cmx * 10).toFixed(1) + 'px,' + (cmy * 8 - e * 20).toFixed(1) + 'px,0) scale(1.04)');
+  // la fuente de luz sigue apenas al cursor (la respiración del haz es una animación CSS en el compositor)
+  css(beam, 'transform', 'translate3d(' + (cmx * 46).toFixed(0) + 'px,0,0)');
+  css(beam, 'opacity', D.beam.toFixed(3));
+  // exposición de los productos + cambio de foco cuando sube la carta
+  var over = Math.max(0, Math.min(1, (scrollY - roomH) / innerHeight)), ex = D.expo, op = Math.min(1, ex * 3).toFixed(3);
+  css(cupEl, 'opacity', op); css(bagEl, 'opacity', op);
   var bright = (.1 + .9 * Math.pow(ex, 1.4)) * (D.dof ? 1 - over * .35 : 1), blur = D.dof ? over * 8 : 0;
-  var fil = (bright > .999 ? '' : 'brightness(' + bright.toFixed(3) + ')') + (blur > .05 ? ' blur(' + blur.toFixed(2) + 'px)' : '');
-  if (fil !== lastFilter) { lastFilter = fil; stage.style.filter = fil; }
-  dim.style.opacity = (over * (D.dof ? .4 : .6)).toFixed(3);
+  css(stage, 'filter', (bright > .999 ? '' : 'brightness(' + bright.toFixed(3) + ')') + (blur > .05 ? ' blur(' + blur.toFixed(2) + 'px)' : ''));
+  css(dim, 'opacity', (over * (D.dof ? .4 : .6)).toFixed(3));
 }
+function css(el, prop, v) { var k = '_' + prop; if (el[k] !== v) { el[k] = v; el.style[prop] = v; } }
 size();
 if (window.gsap) gsap.ticker.add(frame); else (function loop() { requestAnimationFrame(loop); frame(); })();
 })();

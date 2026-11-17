@@ -79,7 +79,7 @@ ScrollTrigger.create({
 });
 
 /* ---------- plano 1–2: fundido desde negro y encendido ---------- */
-var lines = $$('.h1 .ln>span'), ins = $$('.hero [data-in]');
+var lines = $$('.h1 .ln>span, .hero [data-gild]'), ins = $$('.hero [data-in]');
 function wait(s) { return new Promise(function (r) { setTimeout(r, s * 1000); }); }
 function light() {
   gsap.timeline()
@@ -109,6 +109,10 @@ gsap.timeline({ scrollTrigger: { start: 0, end: function () { return innerHeight
   .to('.hero__copy [data-out]', { y: -28, opacity: 0, ease: 'lift', duration: .35, stagger: -.08 }, .1)
   .to('.h1 .ln', { y: -56, opacity: 0, filter: D.low ? 'none' : 'blur(6px)', ease: 'lift', duration: .45, stagger: .08 }, .32);
 
+/* La carta y el footer están fuera de pantalla al cargar: se preparan cuando el navegador queda libre,
+   para no competir con la apertura. Si alguien llega antes, el contenido ya es visible por defecto. */
+(window.requestIdleCallback || function (f) { setTimeout(f, 600); })(below, { timeout: 1500 });
+function below() {
 /* ---------- plano 5: la carta se escribe ---------- */
 var h2l = $$('.h2 .ln>span'), sideLead = $('.carta__side .lead');
 gsap.set(h2l, { yPercent: 112 });
@@ -141,6 +145,8 @@ gsap.from('.carta__note', { opacity: 0, y: 12, duration: .9, ease: 'gild', scrol
 gsap.timeline({ scrollTrigger: { trigger: '.foot', start: 'top 75%', end: 'bottom bottom', scrub: .8 } })
   .fromTo('.foot__word>span>span', { yPercent: 104 }, { yPercent: 0, ease: 'settle', duration: .5, stagger: .06 }, 0)
   .fromTo('.foot__sign', { opacity: 0 }, { opacity: 1, ease: 'none', duration: .2 }, .55);
+ScrollTrigger.refresh();
+}
 
 if (document.fonts) document.fonts.ready.then(function () { ScrollTrigger.refresh(); });
 })();
