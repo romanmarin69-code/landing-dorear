@@ -94,6 +94,10 @@ ScrollTrigger.create({
   trigger: '#carta', start: function () { return 'top ' + nav.offsetHeight; }, end: function () { return 'bottom ' + nav.offsetHeight; },
   toggleClass: { targets: nav, className: 'is-paper' }
 });
+ScrollTrigger.create({
+  trigger: '#visitanos', start: function () { return 'top ' + nav.offsetHeight; }, end: 'max',
+  toggleClass: { targets: nav, className: 'is-night' }
+});
 
 /* ---------- plano 1–2: fundido desde negro y encendido ---------- */
 var lines = $$('.h1 .ln>span, .hero [data-gild]'), ins = $$('.hero [data-in]');

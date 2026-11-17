@@ -101,6 +101,8 @@ ul{margin:0;padding:0;list-style:none}
   transform:translateY(-101%);transition:transform var(--d-short) var(--ease-cut)}
 .nav.is-paper{color:var(--espresso);--focus:var(--roast-ink)}
 .nav.is-paper::before{transform:none}
+/* sobre el pie: franja del estudio, para que la nav no se pise con el contenido */
+.nav.is-night::before{transform:none;background:var(--night);border-bottom-color:var(--rule-night)}
 .nav__l{display:flex;gap:var(--s6)}
 .nav__r{display:flex;justify-content:flex-end}
 .nav__brand{font:600 1.375rem/1 var(--serif);letter-spacing:.32em;margin-right:-.32em;text-transform:uppercase}
