@@ -231,7 +231,7 @@ if (/(^|&)debug(=|&|$)/.test(location.search.slice(1))) {
     var s = fr.slice().sort(function (a, b) { return a - b; }), avg = s.reduce(function (a, b) { return a + b; }, 0) / (s.length || 1);
     dbg.textContent = 'fps ' + Math.round(1000 / avg) + '  peor ' + Math.round(s[s.length - 1] || 0) + ' ms\n' +
       (D.safari ? 'Safari' : 'Chromium/otro') + (D.mac ? ' · Mac' : '') + ' · ' + innerWidth + '×' + innerHeight + ' @' + devicePixelRatio + 'x\n' +
-      'lenis ' + !!D.lenis + ' · blur ' + !!D.dof + ' · granos en worker ' + !!D.beansWorker + ' · gama baja ' + !!D.low;
+      'lenis ' + !!D.lenis + ' · blur ' + !!D.dof + ' · granos en worker ' + !!D.beansWorker + ' · gama baja ' + !!D.low + ' · calidad ' + (D.q ? '-' + D.q : 'plena');
   }, 500);
 }
 })();

@@ -232,7 +232,7 @@ stage.addEventListener('keydown', function (e) {
 addEventListener('scroll', function () { sp = Math.min(1, Math.max(0, scrollY / roomH)); }, { passive: true });
 
 // tamanos (nunca mas que la resolucion del render) y rectangulos cacheados: el loop no lee layout
-var room = $('#room'), roomH = innerHeight, beansLow = false, slowT = 0;
+var room = $('#room'), roomH = innerHeight, beansLow = false;
 function size() {
   roomH = room.offsetHeight || innerHeight;
   var d = DPR;
@@ -269,7 +269,7 @@ function frame() {
   var off = scrollY > roomH + innerHeight * 1.05;          // la portada ya no se ve: no se dibuja
   if (off !== heroOff) { heroOff = off; hero.classList.toggle('is-off', off); }
   if (off || !dt) return;
-  if (!beansLow && raining) { slowT = dt > .0222 ? slowT + dt : Math.max(0, slowT - dt * 2); if (slowT > 3) { beansLow = true; MAXB = 320; D.dof = false; size(); } }
+  quality(now, dt);
   if ((rectT -= dt) <= 0) { rects(); rectT = .25; }
   if (lastMove) { var lm = lastMove; lastMove = null; if (!drag) { stage.classList.toggle('is-grab', cup.hit(lm.x, lm.y) || bag.hit(lm.x, lm.y)); if (scrollY < innerHeight && !REDUCED) push(lm.x, lm.y, lm.t); } }
   var kk = 1 - Math.exp(-dt * 3.6); cmx += (mx - cmx) * kk; cmy += (my - cmy) * kk;
@@ -313,6 +313,29 @@ function frame() {
   cup.ex = bag.ex = Math.min(1, bright);
   css(stage, 'filter', blur > .05 ? 'blur(' + blur.toFixed(2) + 'px)' : '');
   css(dim, 'opacity', (over * (D.dof ? .4 : .6)).toFixed(3));
+}
+/* ---------- calidad adaptativa ----------
+   El navegador no dice qué placa de video hay. Una Mac Intel con gráficos integrados y pantalla Retina mezcla
+   ~6 M de píxeles por capa de pantalla completa y no llega a 60 fps; un iPhone o una PC a 1× sí.
+   Así que se mide: si la portada va lenta de forma sostenida, se baja un escalón. La decisión se recuerda
+   para la próxima visita en ese navegador.
+   1: sin grano animado ni polvo cercano, granos a 1×, sin desenfoque.  2: sin polvo ni respiración del haz, productos a 1,25×. */
+var Q = 0, qT = 0, qN = 0, qGrace = 0, root = document.documentElement;
+function setQ(n) {
+  Q = n; D.q = n; root.classList.toggle('q1', n >= 1); root.classList.toggle('q2', n >= 2);
+  if (n >= 1) { beansLow = true; MAXB = 320; D.dof = false; }
+  if (n >= 2) DPR = Math.min(DPR, 1.25);
+  size(); qT = qN = 0; qGrace = 1.5;
+  try { localStorage.setItem('dorear:q', String(n)); } catch (_) {}
+}
+try { var q0 = +localStorage.getItem('dorear:q'); if (q0 > 0) setQ(Math.min(2, q0)); } catch (_) {}
+function quality(now, dt) {
+  // sólo cuenta con la portada a la vista, la carga terminada y la pestaña activa
+  if (Q >= 2 || loadedRes || REDUCED || document.hidden || scrollY > innerHeight) return;
+  if (qGrace > 0) { qGrace -= dt; return; }
+  if (dt >= .05) return;                          // un tirón aislado (cambio de pestaña, GC) no es el régimen
+  qT += dt; qN++;
+  if (qT >= 2) { if (qT / qN > 1 / 48) setQ(Q + 1); else { qT = qN = 0; } }   // promedio de 2 s por debajo de 48 fps
 }
 function css(el, prop, v) { var k = '_' + prop; if (el[k] !== v) { el[k] = v; el.style[prop] = v; } }
 size();
