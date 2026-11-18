@@ -101,27 +101,53 @@ ScrollTrigger.create({
   toggleClass: { targets: nav, className: 'is-night' }
 });
 
+/* ---------- plano 0: pantalla de carga ----------
+   La palabra se dora de izquierda a derecha mientras las 219 vistas, el flujo óptico, las sombras y los granos
+   llegan a la placa de video. Recién con todo listo sube el telón: la animación nunca carga nada en el camino. */
+var pre = $('#pre'), preLit = $('#preLit'), preBar = $('#preBar'), prePct = $('#prePct'), shown = 0, allIn = false;
+function preTick() {
+  var target = allIn ? 1 : D.progress;
+  shown += (target - shown) * .14; if (allIn && shown > .996) shown = 1;
+  preBar.style.transform = 'scaleX(' + shown.toFixed(4) + ')';
+  preLit.style.clipPath = 'inset(0 ' + ((1 - shown) * 100).toFixed(2) + '% 0 0)';
+  var pc = Math.round(shown * 100); if (prePct.textContent !== '' + pc) { prePct.textContent = pc; pre.setAttribute('aria-valuenow', pc); }
+}
+if (pre) { gsap.ticker.add(preTick); if (lenis) lenis.stop(); }
+D.loaded.then(function () {
+  allIn = true;
+  return new Promise(function (r) { (function chk() { if (!pre || shown >= 1) r(); else setTimeout(chk, 40); })(); });
+}).then(function () {
+  function done() { gsap.ticker.remove(preTick); pre.remove(); root.classList.remove('is-loading'); if (lenis) lenis.start(); ScrollTrigger.refresh(); }
+  if (!pre) { opening(); return; }
+  if (REDUCED) { gsap.to(pre, { autoAlpha: 0, duration: .4, ease: 'none', onComplete: done }); opening(); return; }
+  gsap.timeline({ onComplete: done })
+    .to({}, { duration: .3 })                                                   // un respiro en 100 %
+    .to('.pre__bar, .pre__pct', { opacity: 0, y: -6, duration: .45, ease: 'lift' })
+    .to(pre, { clipPath: 'inset(0% 0% 100% 0%)', duration: 1.15, ease: 'cut' }, '>-.15')   // el telón sube
+    .add(opening, '<+=.4');
+});
+
 /* ---------- plano 1–2: fundido desde negro y encendido ---------- */
 var lines = $$('.h1 .ln>span, .hero [data-gild]'), ins = $$('.hero [data-in]');
-function wait(s) { return new Promise(function (r) { setTimeout(r, s * 1000); }); }
 function light() {
   gsap.timeline()
     .to(D, { expo: 1, duration: 2.4, ease: 'gild' }, 0)
     .to(D, { spin: 1, duration: 3.2, ease: 'cut' }, .2)
     .add(function () { D.rain(); }, 1.1);
 }
-if (REDUCED) {
-  gsap.set(lines, { color: CREAM });
-  D.beam = 1;
-  gsap.to(ins, { opacity: 1, duration: .4, ease: 'none' });
-  D.ready.then(function () { gsap.to(D, { expo: 1, duration: .4, ease: 'none' }); D.rain(); });
-} else {
+function opening() {
+  if (REDUCED) {
+    gsap.set(lines, { color: CREAM });
+    D.beam = 1;
+    gsap.to(ins, { opacity: 1, duration: .4, ease: 'none' });
+    gsap.to(D, { expo: 1, duration: .4, ease: 'none' }); D.rain();
+    return;
+  }
   gsap.timeline({ defaults: { ease: 'gild' } })
     .to(D, { beam: 1, duration: 2.4 }, 0)
     .fromTo(lines, { y: '.07em' }, { y: 0, color: CREAM, duration: 1.6, stagger: .11 }, .15)
-    .fromTo(ins, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .9, stagger: .1 }, .75);
-  // el producto entra segundo: nunca junto con el título, aunque las vistas ya estén en caché
-  Promise.all([D.ready, wait(.6)]).then(light);
+    .fromTo(ins, { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: .9, stagger: .1 }, .75)
+    .add(light, .6);   // el producto entra segundo, nunca junto con el título
 }
 clearTimeout(window.__mfb);   // la apertura quedó armada: ya no hace falta la red de seguridad del <head>
 

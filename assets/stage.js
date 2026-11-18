@@ -28,6 +28,9 @@ var seed = 7; function rnd() { seed = (seed * 16807) % 2147483647; return (seed 
 /* Estado compartido con motion.js. expo: exposicion de los productos 0..1; spin: cuanto del auto-giro esta activo. */
 var D = window.Dorear = { expo: 0, spin: 0, beam: 0, lenis: false, low: LOW, reduced: REDUCED, mac: MAC, safari: SAFARI };
 var readyRes; D.ready = new Promise(function (r) { readyRes = r; });
+// D.loaded: todo descargado, decodificado y en la placa (lo espera la pantalla de carga). D.progress: 0..1
+var loadedRes, atlasOk = false; D.loaded = new Promise(function (r) { loadedRes = r; }); D.progress = 0;
+setTimeout(function () { if (loadedRes) { loadedRes(); loadedRes = null; } }, 25000);   // red de seguridad con conexiones muy lentas
 // las descargas pesadas (vistas, flujo, atlas) arrancan después del primer cuadro pintado: el texto no compite con ellas
 var afterPaint = new Promise(function (r) {
   var done = false, go = function () { if (!done) { done = true; setTimeout(r, 150); } };
@@ -94,7 +97,8 @@ function seq(id, name, autoSpeed, startAngle) {
     [['flow.webp', function (t) { flowTex = t; }], [shFile, function (t) { shTex = t; }]].forEach(function (a) {
       fetch(name + '/' + a[0]).then(function (r) { return r.blob(); })
         .then(function (b) { return createImageBitmap(b, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' }); })
-        .then(function (bm) { a[1](mk(bm)); try { bm.close(); } catch (_) {} o.last = ''; }, function () {});
+        .then(function (bm) { a[1](mk(bm)); try { bm.close(); } catch (_) {} o.last = ''; }, function () {})
+        .then(function () { o.done++; });
     });
   });
   // descarga y decodificacion fuera del hilo principal; el orden sigue el sentido del giro desde la vista inicial
@@ -107,21 +111,24 @@ function seq(id, name, autoSpeed, startAngle) {
         act++;
         fetch(name + '/' + SET + '/' + ('00' + i).slice(-3) + '.webp')
           .then(function (r) { if (!r.ok) throw new Error(r.status); return r.blob(); }).then(toBitmap)
-          .then(function (b) { ready.push([i, b]); }, function () {})
+          .then(function (b) { ready.push([i, b]); }, function () { o.done++; })   // una vista que falla igual cuenta: la carga nunca se cuelga
           .then(function () { act--; pump(); });
       })(order.shift());
     }
   });
-  // subida a la placa: pocas por cuadro, para no trabar el hilo principal
+  /* Subida a la placa. Cada vista se sube y se dibuja una vez, invisible: Safari (y otros) difieren la subida real
+     hasta el primer uso, y ese primer uso en plena animación es un tirón. Durante la pantalla de carga se suben
+     todas; después, a lo sumo una por cuadro. */
   o.pump = function (n) {
     var did = false;
     while (n-- > 0 && ready.length) {
       var r = ready.shift(), i = r[0], b = r[1];
-      if (gl) { tex[i] = mk(b); try { b.close(); } catch (_) {} } else tex[i] = b;
-      texN++; o.last = ''; did = true;
+      if (gl) { tex[i] = mk(b); try { b.close(); } catch (_) {} render(i, i, 0); } else tex[i] = b;
+      texN++; o.done++; o.last = ''; did = true;
     }
     return did;
   };
+  o.done = 0; o.total = N + (gl ? 2 : 0);
   var cx = gl ? null : cv.getContext('2d');
   function near(i) { if (tex[i]) return i; for (var d = 1; d <= N / 2; d++) { if (tex[md(i + d)]) return md(i + d); if (tex[md(i - d)]) return md(i - d); } return -1; }
   o.draw = function (angle) {
@@ -129,6 +136,10 @@ function seq(id, name, autoSpeed, startAngle) {
     var f = ((angle * K) % P + P) % P, i0 = lut[Math.floor(f) % P], i1 = (i0 + 1) % N, t = Math.min(1, (f - pos[i0]) / (((pos[i1] - pos[i0]) % P + P) % P));
     if (!(tex[i0] && tex[i1])) { i0 = i1 = near(t < .5 ? i0 : i1); t = 0; if (i0 < 0) return angle; }
     var key = i0 + ':' + i1 + ':' + t.toFixed(4) + ':' + o.ex.toFixed(3); if (key === o.last) return angle; o.last = key;
+    render(i0, i1, t);
+    return angle;
+  };
+  function render(i0, i1, t) {
     if (gl) {
       gl.viewport(0, 0, cv.width, cv.height); gl.uniform2f(U.ps, .25 / (cv.width * m.ow / m.W), .25 / (cv.height * m.oh / m.H)); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex[i0]); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tex[i1]);
@@ -145,8 +156,7 @@ function seq(id, name, autoSpeed, startAngle) {
       if (t > 0) { cx.globalAlpha = t; cx.globalCompositeOperation = 'lighter'; cx.drawImage(tex[i1], X, Y, Wd, Hd); }
       cx.globalAlpha = 1; cx.globalCompositeOperation = 'source-over';
     }
-    return angle;
-  };
+  }
   o.resize = function (W) { W = Math.max(2, W); var H = Math.round(W * m.H / m.W); if (cv.width === W && cv.height === H) return; cv.width = W; cv.height = H; o.last = ''; };
   o.rect = null;
   o.hit = function (x, y) { var r = o.rect, h = m.hit; if (!r) return false; x = (x - r.left) / r.width; y = (y - r.top) / r.height; return x > h[0] && x < h[2] && y > h[1] && y < h[3]; };
@@ -164,6 +174,8 @@ var BE = (function () {
   if ('transferControlToOffscreen' in bFront && typeof Worker !== 'undefined' && typeof OffscreenCanvas !== 'undefined') {
     try {
       var w = new Worker('assets/beans-worker.js'), back = bBack.transferControlToOffscreen(), front = bFront.transferControlToOffscreen();
+      w.onmessage = function (e) { if (e.data && e.data.t === 'atlas') atlasOk = true; };
+      w.onerror = function () { atlasOk = true; };
       w.postMessage({ t: 'init', back: back, front: front, cell: CELL, maxB: MAXB, maxSub: MAXSUB }, [back, front]);
       afterPaint.then(function () { w.postMessage({ t: 'load', atlas: ATLAS }); });
       D.beansWorker = true;
@@ -174,7 +186,7 @@ var BE = (function () {
     canvas: function (cw, ch) { var c = document.createElement('canvas'); c.width = cw; c.height = ch; return c; } });
   afterPaint.then(function () {
     return Promise.all(ATLAS.map(function (u) { return fetch(u).then(function (r) { return r.blob(); }).then(function (b) { return createImageBitmap(b); }); }));
-  }).then(function (a) { B.atlas(a); }, function () {});
+  }).then(function (a) { B.atlas(a); atlasOk = true; }, function () { atlasOk = true; });
   return { post: function (m) { B[m.t](m); } };
 })();
 // coordenadas de pantalla → píxeles del render de la bolsa (0..1000, 0..1250)
@@ -245,8 +257,14 @@ D.rain = function () { if (raining) return; raining = true; rainT = performance.
 function frame() {
   var now = performance.now(), dt = Math.min(.05, (now - (frame.t || now)) / 1000); frame.t = now;
   // una sola subida de textura por cuadro, alternando objetos: nunca una tarea larga en el hilo principal
-  var first = (frame.k = !frame.k) ? cup : bag;
-  if (!first.pump(1)) (first === cup ? bag : cup).pump(1);
+  var first = (frame.k = !frame.k) ? cup : bag, other = first === cup ? bag : cup;
+  if (loadedRes) {
+    // pantalla de carga: nada se anima todavía, así que se suben vistas durante ~10 ms por cuadro
+    var t0 = performance.now();
+    while (performance.now() - t0 < 10 && (first.pump(1) | other.pump(1))) {}
+    D.progress = (cup.done + bag.done + (atlasOk ? 1 : 0)) / (cup.total + bag.total + 1);
+    if (D.progress >= 1) { loadedRes(); loadedRes = null; }
+  } else if (!first.pump(1)) other.pump(1);
   if (readyRes && cup.some() && bag.some()) { readyRes(); readyRes = null; }
   var off = scrollY > roomH + innerHeight * 1.05;          // la portada ya no se ve: no se dibuja
   if (off !== heroOff) { heroOff = off; hero.classList.toggle('is-off', off); }

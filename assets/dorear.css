@@ -83,6 +83,18 @@ ul{margin:0;padding:0;list-style:none}
 :focus-visible{outline:2px solid var(--focus);outline-offset:4px;border-radius:2px}
 [tabindex="-1"]:focus{outline:none}  /* destinos de anclas: reciben el foco para lectores, sin recuadro */
 
+/* pantalla de carga: la palabra se dora mientras todo llega a la placa; sólo existe con JS */
+.pre{position:fixed;inset:0;z-index:300;display:none;flex-direction:column;align-items:center;justify-content:center;gap:var(--s6);background:var(--deep);color:var(--cream)}
+.js .pre{display:flex}
+.js.is-loading,.js.is-loading body{overflow:hidden}
+.pre__word{position:relative;font:600 clamp(2.5rem,1.6rem + 4.5vw,5.5rem)/1 var(--serif);letter-spacing:.32em;margin-right:-.32em;text-transform:uppercase}
+.pre__word span{display:block}
+.pre__word span:first-child{color:var(--dim-ink)}
+.pre__lit{position:absolute;inset:0;color:var(--cream);clip-path:inset(0 100% 0 0)}
+.pre__bar{width:min(280px,60vw);height:1px;background:var(--rule-night);overflow:hidden}
+.pre__bar i{display:block;height:100%;background:var(--gold);transform:scaleX(0);transform-origin:0 50%}
+.pre__pct{color:var(--kraft-hi);font-variant-numeric:tabular-nums}
+
 .label{font:600 var(--fs-label)/1.5 var(--sans);letter-spacing:var(--track-label);text-transform:uppercase}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 .skip{position:fixed;left:var(--gutter);top:var(--s3);z-index:200;padding:var(--s3) var(--s4);background:var(--gold);color:var(--deep);transform:translateY(-160%);transition:transform var(--d-short) var(--ease-cut)}

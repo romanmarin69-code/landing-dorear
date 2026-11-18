@@ -8,6 +8,6 @@ onmessage = function (e) {
   } else if (m.t === 'load') {
     // los atlas se piden recién cuando el hilo principal avisa que el texto ya se pintó
     Promise.all(m.atlas.map(function (u) { return fetch(u).then(function (r) { return r.blob(); }).then(function (b) { return createImageBitmap(b); }); }))
-      .then(function (a) { B.atlas(a); }, function () {});
+      .then(function (a) { B.atlas(a); postMessage({ t: 'atlas' }); }, function () { postMessage({ t: 'atlas' }); });
   } else if (B && B[m.t]) B[m.t](m);
 };

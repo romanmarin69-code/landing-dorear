@@ -17,7 +17,7 @@
 <link rel="preload" href="fonts/montserrat.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="assets/dorear.css">
 <script>
-  document.documentElement.classList.add('js');
+  document.documentElement.classList.add('js', 'is-loading');
   // red de seguridad: si la coreografía no arranca, todo queda visible
   window.__mfb = setTimeout(function () { document.documentElement.classList.remove('js'); }, 4000);
 </script>
@@ -36,6 +36,11 @@
 </script>
 </head>
 <body>
+<div class="pre" id="pre" role="progressbar" aria-label="Cargando Dorear" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+  <div class="pre__word" aria-hidden="true"><span>Dorear</span><span class="pre__lit" id="preLit">Dorear</span></div>
+  <div class="pre__bar"><i id="preBar"></i></div>
+  <p class="pre__pct label" aria-hidden="true"><span id="prePct">0</span> %</p>
+</div>
 <a class="skip label" href="#carta">Saltar a la carta</a>
 
 <header class="nav" id="nav">

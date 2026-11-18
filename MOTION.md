@@ -128,6 +128,7 @@ En navegadores sin `OffscreenCanvas` el mismo `beans.js` corre en el hilo princi
 
 ## 10. Presupuesto de carga
 
-- El texto se pinta desde el primer cuadro, "sin luz" (`--dim-ink`): es el LCP y no depende de JS.
-- Las vistas, el flujo óptico, las sombras y los atlas se piden 150 ms después del primer pintado.
-- Una sola subida de textura a la GPU por cuadro. La carta y el footer se preparan cuando el navegador está libre (`requestIdleCallback`).
+- **Pantalla de carga (plano 0).** La palabra DOREAR se dora de izquierda a derecha con una línea dorada y el porcentaje, mientras las 219 vistas, el flujo óptico, las sombras y los atlas de granos se descargan, se suben a la placa y **se dibujan una vez, invisibles**. Safari (y otros) difieren la subida real de una textura hasta su primer uso; sin este precalentamiento, cada vista nueva era un tirón en plena animación. Con todo listo, la pantalla sube como un telón y empieza la apertura.
+- Se volvió a la pantalla de carga a pedido del cliente: la versión con carga progresiva arrancaba antes pero tironeaba en la primera visita (giro con saltos mientras faltaban vistas). Medido en primera visita, Wi-Fi de 20 Mbps, Retina: cuadros trabados en los primeros 6 s de animación 21 → 7; p95 33 → 18 ms.
+- Red de seguridad: si la conexión es muy lenta, a los 25 s arranca con lo que haya.
+- Durante la pantalla de carga se suben vistas ~10 ms por cuadro; después, a lo sumo una por cuadro. La carta y el footer se preparan cuando el navegador está libre (`requestIdleCallback`).
