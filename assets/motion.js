@@ -66,9 +66,11 @@ CustomEase.create('cut', '.76,0,.24,1');
 CustomEase.create('lift', '.5,0,.75,0');
 var gild = CustomEase.get('gild');
 
-/* ---------- desplazamiento: Lenis sólo con puntero fino ---------- */
+/* ---------- desplazamiento: Lenis sólo con mouse en Windows/Linux ----------
+   En Mac el trackpad ya entrega desplazamiento con inercia del sistema; sumarle Lenis lo vuelve pesado
+   (el contenido llega tarde respecto del dedo). En táctiles tampoco: el scroll nativo es mejor. */
 var lenis = null;
-if (FINE && !REDUCED && window.Lenis) {
+if (FINE && !REDUCED && window.Lenis && !D.mac) {
   lenis = new Lenis({ lerp: .085, wheelMultiplier: .9, smoothWheel: true });
   D.lenis = true;
   lenis.on('scroll', ScrollTrigger.update);
@@ -189,4 +191,18 @@ ScrollTrigger.refresh();
 }
 
 if (document.fonts) document.fonts.ready.then(function () { ScrollTrigger.refresh(); });
+
+/* ---------- diagnóstico: ?debug muestra fps y las decisiones tomadas para este equipo ---------- */
+if (/(^|&)debug(=|&|$)/.test(location.search.slice(1))) {
+  var dbg = document.createElement('div'), fr = [];
+  dbg.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:999;padding:8px 10px;background:#000c;color:#E0A526;font:12px/1.5 ui-monospace,Menlo,monospace;white-space:pre;pointer-events:none;border-radius:4px';
+  document.body.appendChild(dbg);
+  gsap.ticker.add(function (t, dt) { fr.push(dt); if (fr.length > 120) fr.shift(); });
+  setInterval(function () {
+    var s = fr.slice().sort(function (a, b) { return a - b; }), avg = s.reduce(function (a, b) { return a + b; }, 0) / (s.length || 1);
+    dbg.textContent = 'fps ' + Math.round(1000 / avg) + '  peor ' + Math.round(s[s.length - 1] || 0) + ' ms\n' +
+      (D.safari ? 'Safari' : 'Chromium/otro') + (D.mac ? ' · Mac' : '') + ' · ' + innerWidth + '×' + innerHeight + ' @' + devicePixelRatio + 'x\n' +
+      'lenis ' + !!D.lenis + ' · blur ' + !!D.dof + ' · granos en worker ' + !!D.beansWorker + ' · gama baja ' + !!D.low;
+  }, 500);
+}
 })();

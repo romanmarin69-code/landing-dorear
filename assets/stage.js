@@ -15,6 +15,10 @@ var MOB = matchMedia('(max-width:820px)');
 var N_ = navigator, conn = N_.connection || {};
 var LOW = !!conn.saveData || (N_.deviceMemory && N_.deviceMemory <= 4) || (N_.hardwareConcurrency && N_.hardwareConcurrency <= 4);
 var DPR = Math.min(devicePixelRatio || 1, 2);
+var UA = N_.userAgent || '';
+// Safari de escritorio y Mac: filtros CSS sobre capas grandes son caros, y el trackpad ya trae inercia propia
+var SAFARI = /^((?!chrome|chromium|crios|fxios|edg|android).)*safari/i.test(UA);
+var MAC = /Mac/.test(N_.platform || UA) && !(N_.maxTouchPoints > 1);
 // set de vistas: 66 % en pantallas chicas o equipos modestos sin pantalla densa
 var SET = (MOB.matches || conn.saveData || (LOW && DPR < 1.5)) ? 'h-sm' : 'h';
 if (SET === 'h-sm') DPR = Math.min(DPR, 1.5);   // más densidad que la textura no suma nitidez, sólo costo
@@ -22,7 +26,7 @@ if (SET === 'h-sm') DPR = Math.min(DPR, 1.5);   // más densidad que la textura 
 var seed = 7; function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
 
 /* Estado compartido con motion.js. expo: exposicion de los productos 0..1; spin: cuanto del auto-giro esta activo. */
-var D = window.Dorear = { expo: 0, spin: 0, beam: 0, lenis: false, low: LOW, reduced: REDUCED };
+var D = window.Dorear = { expo: 0, spin: 0, beam: 0, lenis: false, low: LOW, reduced: REDUCED, mac: MAC, safari: SAFARI };
 var readyRes; D.ready = new Promise(function (r) { readyRes = r; });
 // las descargas pesadas (vistas, flujo, atlas) arrancan después del primer cuadro pintado: el texto no compite con ellas
 var afterPaint = new Promise(function (r) {
@@ -36,7 +40,7 @@ var META = {"cup":{"N":96,"P":192,"pos":[0,2,4,6,8,10,12,14,16,18,20,22,24,26,28
 /* ---------- secuencias ---------- */
 var VS = 'attribute vec2 p;varying vec2 v;void main(){v=vec2(p.x*.5+.5,.5-p.y*.5);gl_Position=vec4(p,0.,1.);}';
 // A,B: dos vistas vecinas; F: flujo optico entre ellas; S: sombras.
-var FS = 'precision highp float;varying vec2 v;uniform sampler2D A,B,F,S;uniform vec4 crop,orect,tile,sa,sb;uniform vec2 fsc,fh,shf,ps,fe;uniform float t,useF;' +
+var FS = 'precision highp float;varying vec2 v;uniform sampler2D A,B,F,S;uniform vec4 crop,orect,tile,sa,sb;uniform vec2 fsc,fh,shf,ps,fe;uniform float t,useF,ex;' +
  'void main(){float s=0.;vec2 qs=(v-crop.xy)/crop.zw;' +
  'if(qs.x>0.&&qs.y>0.&&qs.x<1.&&qs.y<1.){vec2 c=clamp(qs,shf,1.-shf);s=mix(texture2D(S,sa.xy+c*sa.zw).r,texture2D(S,sb.xy+c*sb.zw).r,t);}' +
  'vec4 o=vec4(0.,0.,0.,s);vec2 q=(v-orect.xy)/orect.zw;' +
@@ -46,7 +50,7 @@ var FS = 'precision highp float;varying vec2 v;uniform sampler2D A,B,F,S;uniform
  'vec4 a=texture2D(A,qa+ps)+texture2D(A,qa-ps)+texture2D(A,qa+e)+texture2D(A,qa-e);' +
  'vec4 b=texture2D(B,qb+ps)+texture2D(B,qb-ps)+texture2D(B,qb+e)+texture2D(B,qb-e);' +
  'float m=smoothstep(0.,fe.x,q.x)*smoothstep(0.,fe.x,1.-q.x)*smoothstep(0.,fe.y,q.y)*smoothstep(0.,fe.y,1.-q.y);' +
- 'o=mix(o,((1.-t)*a+t*b)*.25,m);}gl_FragColor=o;}';
+ 'o=mix(o,((1.-t)*a+t*b)*.25,m);}gl_FragColor=vec4(o.rgb*ex,o.a);}';   // ex: exposición (encendido de la apertura) dentro del shader, sin filtros CSS
 var BMO = { premultiplyAlpha: 'premultiply', colorSpaceConversion: 'none' };
 function toBitmap(blob) { return createImageBitmap(blob, BMO).catch(function () { return createImageBitmap(blob); }); }
 
@@ -57,7 +61,7 @@ function seq(id, name, autoSpeed, startAngle) {
   if (shFile === 'sh-sm.webp') m = Object.assign({}, m, { sw: 122, sh: 139, sW: 1952, sH: 1112 });
   for (var li = 0, lj = 0; lj < P; lj++) { while (li + 1 < N && pos[li + 1] <= lj) li++; lut[lj] = li; }
   var tex = new Array(N), ready = [], texN = 0;
-  var o = { cv: cv, a: startAngle, v: 0, auto: autoSpeed, drag: false, last: '', lost: false };
+  var o = { cv: cv, a: startAngle, v: 0, auto: autoSpeed, drag: false, last: '', lost: false, ex: 1 };
   function md(i) { return ((i % N) + N) % N; }
   var gl = null, prog, U = {}, flowTex = null, shTex = null;
   try { gl = cv.getContext('webgl', { premultipliedAlpha: true, alpha: true, antialias: false, depth: false, stencil: false, powerPreference: 'high-performance' }); } catch (_) { gl = null; }
@@ -69,7 +73,7 @@ function seq(id, name, autoSpeed, startAngle) {
       gl.useProgram(prog);
       var buf = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
       var loc = gl.getAttribLocation(prog, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-      ['A', 'B', 'F', 'S', 'crop', 'orect', 'tile', 'sa', 'sb', 'fsc', 'fh', 'shf', 'ps', 'fe', 't', 'useF'].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
+      ['A', 'B', 'F', 'S', 'crop', 'orect', 'tile', 'sa', 'sb', 'fsc', 'fh', 'shf', 'ps', 'fe', 't', 'useF', 'ex'].forEach(function (n) { U[n] = gl.getUniformLocation(prog, n); });
       gl.uniform1i(U.A, 0); gl.uniform1i(U.B, 1); gl.uniform1i(U.F, 2); gl.uniform1i(U.S, 3);
       gl.uniform4f(U.crop, m.x / m.W, m.y / m.H, m.w / m.W, m.h / m.H); gl.uniform4f(U.orect, m.ox / m.W, m.oy / m.H, m.ow / m.W, m.oh / m.H);
       gl.uniform2f(U.fsc, 1 / m.ow, 1 / m.oh); gl.uniform2f(U.fh, .5 / m.fw, .5 / m.fh); gl.uniform2f(U.shf, .5 / m.sw, .5 / m.sh); gl.uniform2f(U.fe, 14 / m.ow, 14 / m.oh);
@@ -124,7 +128,7 @@ function seq(id, name, autoSpeed, startAngle) {
     if (o.lost) return angle;
     var f = ((angle * K) % P + P) % P, i0 = lut[Math.floor(f) % P], i1 = (i0 + 1) % N, t = Math.min(1, (f - pos[i0]) / (((pos[i1] - pos[i0]) % P + P) % P));
     if (!(tex[i0] && tex[i1])) { i0 = i1 = near(t < .5 ? i0 : i1); t = 0; if (i0 < 0) return angle; }
-    var key = i0 + ':' + i1 + ':' + t.toFixed(4); if (key === o.last) return angle; o.last = key;
+    var key = i0 + ':' + i1 + ':' + t.toFixed(4) + ':' + o.ex.toFixed(3); if (key === o.last) return angle; o.last = key;
     if (gl) {
       gl.viewport(0, 0, cv.width, cv.height); gl.uniform2f(U.ps, .25 / (cv.width * m.ow / m.W), .25 / (cv.height * m.oh / m.H)); gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex[i0]); gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, tex[i1]);
@@ -133,8 +137,9 @@ function seq(id, name, autoSpeed, startAngle) {
       var s0 = m.NS > 1 ? i0 : 0, s1 = m.NS > 1 ? i1 : 0;
       gl.uniform4f(U.sa, (s0 % m.sc) * m.sw / m.sW, Math.floor(s0 / m.sc) * m.sh / m.sH, m.sw / m.sW, m.sh / m.sH);
       gl.uniform4f(U.sb, (s1 % m.sc) * m.sw / m.sW, Math.floor(s1 / m.sc) * m.sh / m.sH, m.sw / m.sW, m.sh / m.sH);
-      gl.uniform1f(U.t, t); gl.uniform1f(U.useF, flowTex && i0 !== i1 ? 1 : 0); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      gl.uniform1f(U.t, t); gl.uniform1f(U.useF, flowTex && i0 !== i1 ? 1 : 0); gl.uniform1f(U.ex, o.ex); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     } else {
+      css(cv, 'filter', o.ex > .999 ? '' : 'brightness(' + o.ex.toFixed(3) + ')');   // sin WebGL: el filtro sólo sobre este lienzo
       var X = Math.round(m.ox / m.W * cv.width), Y = Math.round(m.oy / m.H * cv.height), Wd = Math.round(m.ow / m.W * cv.width), Hd = Math.round(m.oh / m.H * cv.height);
       cx.setTransform(1, 0, 0, 1, 0, 0); cx.clearRect(0, 0, cv.width, cv.height); cx.globalAlpha = 1 - t; cx.drawImage(tex[i0], X, Y, Wd, Hd);
       if (t > 0) { cx.globalAlpha = t; cx.globalCompositeOperation = 'lighter'; cx.drawImage(tex[i1], X, Y, Wd, Hd); }
@@ -180,7 +185,7 @@ function burst(x, y) { var p = toRender(x, y); if (p) BE.post({ t: 'burst', px: 
 /* ---------- atmosfera: polvo suspendido en tres profundidades ---------- */
 var dgs = [0, 1, 2].map(function (k) { var g = document.createElement('div'); g.className = 'dg'; $(k === 2 ? '#dustNear' : '#dustFar').appendChild(g); return g; });
 if (!REDUCED) {
-  var MOTES = LOW || MOB.matches ? 24 : 64;
+  var MOTES = LOW || MOB.matches ? 24 : SAFARI ? 32 : 64;   // Safari de escritorio compone peor muchas capas a 2×
   for (var mi = 0; mi < MOTES; mi++) {
     var dep = mi < MOTES * .6 ? 0 : mi < MOTES * .9 ? 1 : 2, me = document.createElement('i'); me.className = 'mote';
     var ms = dep === 0 ? 3 + rnd() * 6 : dep === 1 ? 9 + rnd() * 12 : 80 + rnd() * 120, ma = dep === 0 ? .18 + rnd() * .25 : dep === 1 ? .12 + rnd() * .14 : .05 + rnd() * .06, mdur = 1.12 / ((.004 + rnd() * .01) * (dep + 1)), mt = 4 + rnd() * 5;
@@ -221,7 +226,7 @@ function size() {
   var d = DPR;
   OB.forEach(function (o) { var r = o.cv.getBoundingClientRect(); o.resize(Math.min(Math.round(r.width * d), 1000)); });
   // el lienzo de granos se extiende 8 % a los lados y 15 % arriba de la bolsa
-  var r = bag.cv.getBoundingClientRect(), bd = beansLow ? 1 : d;
+  var r = bag.cv.getBoundingClientRect(), bd = beansLow ? 1 : Math.min(d, 1.5);   // granos de ~15 px: más de 1,5× no suma nitidez
   BE.post({ t: 'size', w: Math.round(r.width * 1.16 * bd), h: Math.round(r.height * 1.25 * bd), scale: r.width * bd / 1000 });
   rects();
 }
@@ -229,8 +234,10 @@ function rects() { OB.forEach(function (o) { o.rect = o.cv.getBoundingClientRect
 addEventListener('resize', size);
 
 var cupEl = $('#cup'), bagEl = $('#bagbox'), wall = $('#wall'), beam = $('#beam'), dim = $('#dim');
-var prevLook = [null, null], heroOff = false, rectT = 0, rainT = 0;
-D.dof = !LOW && !REDUCED; // rack focus sólo donde sobra GPU
+var prevLook = [null, null], heroOff = false, rectT = 0, rainT = 0, beanDt = 0;
+// rack focus (desenfoque del estudio al subir la carta) sólo donde sobra GPU: un blur sobre una capa de pantalla
+// completa es caro en Safari y en pantallas Retina (4× píxeles); ahí alcanza con el oscurecimiento
+D.dof = !LOW && !REDUCED && !SAFARI && DPR < 2;
 
 // la lluvia arranca cuando motion.js lo pide; si los atlas todavía no llegaron, el motor la guarda para cuando estén
 D.rain = function () { if (raining) return; raining = true; rainT = performance.now(); BE.post({ t: 'rain', n: RAIN, reduced: REDUCED }); };
@@ -260,10 +267,14 @@ function frame() {
   });
   // granos: un mensaje por cuadro con el estado de la bolsa; la física y el dibujo corren en su hilo.
   // En equipos chicos, con los granos quietos y sin interacción, se redibujan a 30 Hz.
-  if (raining) BE.post({ t: 'frame', dt: dt, ang: bagAng, w: bagW, sv: scrollV, top: scrollY < innerHeight, reduced: REDUCED, maxB: MAXB,
+  // a 120 Hz (ProMotion) los granos se calculan y dibujan a 60: invisible a ese tamaño, la mitad de trabajo
+  beanDt += dt;
+  if (raining && beanDt >= 1 / 65) BE.post({ t: 'frame', dt: beanDt, ang: bagAng, w: bagW, sv: scrollV, top: scrollY < innerHeight, reduced: REDUCED, maxB: MAXB,
     calm: (LOW || MOB.matches) && !drag && now - pushT > 600 && now - rainT > 5000 });
+  if (beanDt >= 1 / 65 || !raining) beanDt = 0;
   // Sólo se escribe en el DOM lo que cambió: con el cursor quieto y sin scroll, el loop no toca estilos.
-  if (!REDUCED) {
+  // parallax del polvo: mueve tres capas de pantalla completa por cuadro; en Safari se omite (el polvo sigue flotando)
+  if (!REDUCED && !SAFARI) {
     css(dgs[0], 'transform', 'translate3d(' + (-cmx * 12).toFixed(1) + 'px,' + (-cmy * 6).toFixed(1) + 'px,0)');
     css(dgs[1], 'transform', 'translate3d(' + (-cmx * 32).toFixed(1) + 'px,' + (-cmy * 16).toFixed(1) + 'px,0)');
     css(dgs[2], 'transform', 'translate3d(' + (-cmx * 120).toFixed(1) + 'px,' + (-cmy * 60).toFixed(1) + 'px,0)');
@@ -281,7 +292,8 @@ function frame() {
   var over = Math.max(0, Math.min(1, (scrollY - roomH) / innerHeight)), ex = D.expo, op = Math.min(1, ex * 3).toFixed(3);
   css(cupEl, 'opacity', op); css(bagEl, 'opacity', op);
   var bright = (.1 + .9 * Math.pow(ex, 1.4)) * (D.dof ? 1 - over * .35 : 1), blur = D.dof ? over * 8 : 0;
-  css(stage, 'filter', (bright > .999 ? '' : 'brightness(' + bright.toFixed(3) + ')') + (blur > .05 ? ' blur(' + blur.toFixed(2) + 'px)' : ''));
+  cup.ex = bag.ex = Math.min(1, bright);
+  css(stage, 'filter', blur > .05 ? 'blur(' + blur.toFixed(2) + 'px)' : '');
   css(dim, 'opacity', (over * (D.dof ? .4 : .6)).toFixed(3));
 }
 function css(el, prop, v) { var k = '_' + prop; if (el[k] !== v) { el[k] = v; el.style[prop] = v; } }
