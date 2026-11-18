@@ -242,6 +242,9 @@ ul{margin:0;padding:0;list-style:none}
 .map__embed{display:block;width:100%;height:100%;border:0;pointer-events:none;
   filter:invert(.9) hue-rotate(180deg) sepia(.35) saturate(.85) brightness(.92) contrast(.95)}
 .map__frame.is-live .map__embed{pointer-events:auto}
+/* el iframe vacío (fachada sin cargar) es transparente, pero Safari igual le aplica el filtro en cada repintado:
+   ~200 ms por cuadro al recorrer el pie (medido). Hasta que recibe su src no se pinta. */
+.map__embed[data-src]:not([src]){display:none}
 .map__veil{position:absolute;inset:0;display:flex;align-items:flex-start;justify-content:flex-end;padding:var(--s5);border:0;background:transparent;color:var(--cream);cursor:pointer}
 .map__veil span{padding:var(--s2) var(--s3);background:rgb(15 10 5 / .78);border-radius:2px;opacity:0;transform:translateY(-4px);transition:opacity var(--d-short) var(--ease-gild),transform var(--d-short) var(--ease-gild)}
 .map__veil:hover span,.map__veil:focus-visible span{opacity:1;transform:none}

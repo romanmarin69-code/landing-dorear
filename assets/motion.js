@@ -11,6 +11,28 @@ var FINE = matchMedia('(hover: hover) and (pointer: fine)').matches;
 var COARSE = matchMedia('(pointer: coarse)').matches;
 var css = getComputedStyle(root), CREAM = css.getPropertyValue('--cream').trim() || '#D5C4AE';
 
+/* ---------- papel de la carta: el ruido se dibuja una sola vez ----------
+   La fibra del papel es un SVG con feTurbulence. Safari lo vuelve a calcular cada vez que repinta la carta, y al
+   recorrerla eso la bajaba a ~11 fps (medido). Se rasteriza una vez a un lienzo y queda como imagen fija: mismo
+   aspecto, sin cálculo por cuadro. Sin JS, o si algo falla, sigue el SVG del CSS. */
+(function paper() {
+  var el = $('#carta'); if (!el) return;
+  var bg = getComputedStyle(el).backgroundImage, m = /url\("(data:image\/svg\+xml[^"]*)"\)/.exec(bg); if (!m) return;
+  var img = new Image();
+  img.onload = function () {
+    try {
+      var c = document.createElement('canvas'); c.width = c.height = 440;   // 220 px a 2×
+      c.getContext('2d').drawImage(img, 0, 0, 440, 440);
+      c.toBlob(function (b) {
+        if (!b) return;
+        el.style.backgroundImage = bg.replace(m[0], 'url("' + URL.createObjectURL(b) + '")');
+        el.style.backgroundSize = '220px 220px,auto,auto';
+      });
+    } catch (_) {}
+  };
+  img.src = m[1];
+})();
+
 /* ---------- estado del local, en hora de Buenos Aires ---------- */
 (function status() {
   var el = $('#status'); if (!el || !window.Intl) return;
