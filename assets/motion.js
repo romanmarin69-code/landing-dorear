@@ -37,13 +37,16 @@ var css = getComputedStyle(root), CREAM = css.getPropertyValue('--cream').trim()
 /* ---------- mapa: no captura la rueda ni el arrastre hasta que se lo activa ---------- */
 (function mapa() {
   var f = $('#mapFrame'), v = $('#mapVeil'); if (!f || !v) return;
-  // fachada: el mapa se pide cuando el pie está a 800 px de entrar en pantalla
-  var ifr = f.querySelector('iframe[data-src]');
+  /* fachada: el mapa se pide cuando su recuadro está a la vista (25 %) y el scroll lleva 350 ms quieto.
+     En Safari el iframe de Google corre en el mismo hilo que la página: si se carga mientras se recorre
+     la carta, su JavaScript (≈130 ms de tareas largas medidas) traba el scroll. */
+  var ifr = f.querySelector('iframe[data-src]'), inView = false, quiet = null;
   function load() { if (ifr && !ifr.src) ifr.src = ifr.getAttribute('data-src'); }
+  function tryLoad() { clearTimeout(quiet); if (inView) quiet = setTimeout(function () { if (inView) load(); }, 350); }
   if (ifr) {
     if ('IntersectionObserver' in window) {
-      var io = new IntersectionObserver(function (es) { if (es.some(function (e) { return e.isIntersecting; })) { load(); io.disconnect(); } }, { rootMargin: '800px 0px' });
-      io.observe(f);
+      new IntersectionObserver(function (es) { inView = es.some(function (e) { return e.isIntersecting; }); tryLoad(); }, { threshold: .25 }).observe(f);
+      addEventListener('scroll', function () { if (inView && !ifr.src) tryLoad(); }, { passive: true });
     } else load();
   }
   v.addEventListener('click', function () { load(); f.classList.add('is-live'); if (ifr) ifr.focus(); });
