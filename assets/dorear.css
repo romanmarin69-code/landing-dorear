@@ -196,6 +196,9 @@ ul{margin:0;padding:0;list-style:none}
 
 /* tramo para el travelling antes de que suba la carta */
 .room{height:110vh;height:110svh}
+/* con el café: más recorrido para que el vaso aterrice de frente y se sirva sin apuro (stage.js) */
+.has-pour .room{height:150vh;height:150svh}
+#cupPour{pointer-events:none}
 
 /* ---------------- carta: papel ---------------- */
 .carta{position:relative;z-index:2;color:var(--espresso);border-radius:var(--radius-sheet) var(--radius-sheet) 0 0;padding:var(--section) var(--gutter) calc(var(--section) * .8);
@@ -290,6 +293,7 @@ ul{margin:0;padding:0;list-style:none}
   .stage:focus-visible::after{inset:42% var(--gutter) var(--s5)}
   #bagbox{--bh:min(60svh,124vw);left:calc(35vw - var(--bh)*.072);bottom:-1svh}
   #cup{height:min(48svh,100vw);left:2vw;bottom:-3svh}
+  .has-pour .room{height:140svh}  /* el título se va en 0,8 pantallas; el café necesita ~0,35 más. La carta, cerca */
   .hero__foot{display:none}
   .hint{display:none}  /* en táctil los productos giran solos; la pista quedaba sobre los granos */
   .carta{border-radius:20px 20px 0 0}

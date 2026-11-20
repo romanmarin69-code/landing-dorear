@@ -218,7 +218,7 @@ addEventListener('pointermove', function (e) {
   } else if (e.target === stage || stage.contains(e.target)) lastMove = { x: e.clientX, y: e.clientY, t: performance.now() };
 }, { passive: true });
 stage.addEventListener('pointerdown', function (e) {
-  var o = cup.hit(e.clientX, e.clientY) ? cup : bag.hit(e.clientX, e.clientY) ? bag : null;
+  var o = cup.hit(e.clientX, e.clientY) && !D.pourLock ? cup : bag.hit(e.clientX, e.clientY) ? bag : null;
   if (!o) { burst(e.clientX, e.clientY); return; }
   o.v = 0; drag = { o: o, x: e.clientX, t: performance.now() }; o.drag = true; stage.classList.add('is-grabbing');
   try { stage.setPointerCapture(e.pointerId); } catch (_) {}
@@ -227,7 +227,7 @@ function up() { if (drag) { drag.o.drag = false; drag = null; } stage.classList.
 stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up); stage.addEventListener('lostpointercapture', up); addEventListener('blur', up);
 stage.addEventListener('keydown', function (e) {
   var k = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0; if (!k) return;
-  e.preventDefault(); OB.forEach(function (o, j) { o.v += k * KICK * (j ? .8 : 1); });
+  e.preventDefault(); OB.forEach(function (o, j) { if (!j && D.pourLock) return; o.v += k * KICK * (j ? .8 : 1); });
 });
 addEventListener('scroll', function () { sp = Math.min(1, Math.max(0, scrollY / roomH)); }, { passive: true });
 
@@ -240,7 +240,8 @@ function size() {
   // el lienzo de granos se extiende 8 % a los lados y 15 % arriba de la bolsa
   var r = bag.cv.getBoundingClientRect(), bd = beansLow ? 1 : Math.min(d, 1.5);   // granos de ~15 px: más de 1,5× no suma nitidez
   BE.post({ t: 'size', w: Math.round(r.width * 1.16 * bd), h: Math.round(r.height * 1.25 * bd), scale: r.width * bd / 1000 });
-  rects();
+  rects(); pourSize(); pourSpan();
+  var nv = $('#nav'); PO.navB = nv ? nv.getBoundingClientRect().bottom : 0;
 }
 function rects() { OB.forEach(function (o) { o.rect = o.cv.getBoundingClientRect(); }); }
 addEventListener('resize', size);
@@ -253,6 +254,94 @@ D.dof = !LOW && !REDUCED && !SAFARI && DPR < 2;
 
 // la lluvia arranca cuando motion.js lo pide; si los atlas todavía no llegaron, el motor la guarda para cuando estén
 D.rain = function () { if (raining) return; raining = true; rainT = performance.now(); BE.post({ t: 'rain', n: RAIN, reduced: REDUCED }); };
+
+/* ---------- el café: con el scroll, el vaso aterriza de frente, salta la tapa y cae un chorro ----------
+   Render de Blender con la misma cámara que el giro, en un lienzo extendido hacia arriba y a la izquierda (el
+   chorro baja desde fuera de pantalla). Se descarga una base (vaso abierto) y, por cuadro, sólo el rectángulo que
+   cambia. En el lienzo se reemplazan píxeles con 'copy' dentro de un recorte entero: sin bordes ni sombras dobles.
+   Se carga después de la apertura y sin bloquearla; si alguien llega antes, el vaso igual aterriza de frente. */
+/* tramos del recorrido de la portada (0..1). El café empieza recién cuando el título ya se fue (motion.js lo saca
+   en los primeros 0,8 de pantalla): así la tapa y el chorro nunca cruzan el texto. Se recalcula con cada tamaño. */
+var POUR = { L0: .06, L1: .5, P0: .56, P1: .98 };
+function pourSpan() { POUR.P0 = Math.max(.56, Math.min(.8, innerHeight * .8 / roomH + .03)); POUR.L1 = POUR.P0 - .06; }
+var pourEl = $('#cupPour'), PO = { ok: !REDUCED && !!pourEl, ready: false, on: false, cur: -1, k: 1, img: [], bad: [], base: null, man: null };
+if (PO.ok) document.documentElement.classList.add('has-pour');
+function smooth(a, b, x) { x = Math.max(0, Math.min(1, (x - a) / (b - a))); return x * x * (3 - 2 * x); }
+if (PO.ok) D.loaded.then(function () {
+  var dir = SET === 'h-sm' ? 'm' : 'd';
+  PO.as = dir === 'm' ? .5 : 1;                        // escala de los archivos respecto del render
+  (window.requestIdleCallback || function (f) { setTimeout(f, 300); })(function () {
+    fetch('cafe/pour.json').then(function (r) { return r.json(); }).then(function (man) {
+      PO.man = man;
+      // cada cuadro trae 0..n zonas que cambian (tapa, chorro, sombras), cada una en su archivo
+      var list = [['base', -1, 0]];
+      man.f.forEach(function (rs, i) { if (rs) { PO.img[i] = []; rs.forEach(function (r, k) { list.push([('00' + i).slice(-3) + '_' + k, i, k]); }); } });
+      var left = list.length, act = 0;
+      (function pump() {
+        while (act < 4 && list.length) {
+          (function (it) {
+            act++;
+            fetch('cafe/' + dir + '/' + it[0] + '.webp').then(function (r) { if (!r.ok) throw r.status; return r.blob(); })
+              .then(function (b) { return createImageBitmap(b); })
+              .then(function (bm) { if (it[1] < 0) PO.base = bm; else PO.img[it[1]][it[2]] = bm; })
+              .catch(function () { if (it[1] >= 0) PO.bad[it[1]] = 1; })      // un cuadro incompleto se omite; la base es obligatoria
+              .then(function () { act--; if (--left === 0) { pourSize(); pourWarmList(); PO.ready = !!PO.base; } else pump(); });
+          })(list.shift());
+        }
+      })();
+    }).catch(function () {});
+  });
+});
+// el lienzo del café cubre el del vaso más la extensión; misma caja, mismo origen de transformación
+function pourSize() {
+  if (!PO.man || !pourEl) return;
+  // medidas de layout exactas (offset* redondea a enteros: medio píxel de error se ve como un borde doble)
+  var cs = getComputedStyle(cupEl), m = PO.man, cw = parseFloat(cs.width), ch = parseFloat(cs.height), s = cw / m.W0;
+  var el = m.EXT_L * s, et = m.EXT_T * (ch / m.H0), w = m.W * s, h = m.H * (ch / m.H0);
+  var st = pourEl.style;
+  st.left = (parseFloat(cs.left) - el) + 'px'; st.bottom = cs.bottom; st.top = 'auto';
+  st.width = w + 'px'; st.height = h + 'px'; st.transformOrigin = (el + cw / 2) + 'px ' + (et + ch / 2) + 'px';
+  var bw = Math.min(Math.round(w * DPR), Math.round(m.W * PO.as)), bh = Math.round(bw * m.H / m.W);
+  if (pourEl.width !== bw || pourEl.height !== bh) { pourEl.width = bw; pourEl.height = bh; }
+  PO.k = bw / m.W; PO.ctx = pourEl.getContext('2d'); PO.cur = -1; PO.full = true;
+}
+// reemplaza los píxeles de un rectángulo del render (en px de render) por los de una imagen dibujada en 'dst'
+function pourCopy(img, rect, dst) {
+  var k = PO.k, c = PO.ctx, x0 = Math.ceil(rect[0] * k), y0 = Math.ceil(rect[1] * k), x1 = Math.floor((rect[0] + rect[2]) * k), y1 = Math.floor((rect[1] + rect[3]) * k);
+  if (x1 <= x0 || y1 <= y0) return;
+  c.save(); c.beginPath(); c.rect(x0, y0, x1 - x0, y1 - y0); c.clip(); c.globalCompositeOperation = 'copy';
+  c.drawImage(img, dst[0] * k, dst[1] * k, dst[2] * k, dst[3] * k); c.restore();
+}
+/* el chorro nace de la oscuridad debajo del menú: sin esto pasa por detrás del logo. Máscara en coordenadas
+   del lienzo (antes de sus transformaciones), calculada con su caja en pantalla leída al inicio del cuadro. */
+function pourMask(r) {
+  var lh = parseFloat(pourEl.style.height) || 1, k = lh / Math.max(1, r.height);
+  var a = Math.round((PO.navB + innerHeight * .02 - r.top) * k), b = Math.round((PO.navB + innerHeight * .2 - r.top) * k);
+  if (a === PO.ma && b === PO.mb) return; PO.ma = a; PO.mb = b;
+  var g = 'linear-gradient(to bottom,transparent ' + a + 'px,#000 ' + b + 'px)';
+  pourEl.style.webkitMaskImage = g; pourEl.style.maskImage = g;
+}
+/* precalentamiento: la primera vez que se dibuja una imagen el navegador la sube a la placa, y en Safari eso es un
+   tirón justo cuando aparece el café. Se dibuja cada zona una vez, de a una por cuadro y con el lienzo invisible. */
+function pourWarmList() {
+  PO.warm = [[PO.base, PO.man.base]];
+  PO.man.f.forEach(function (rs, i) { if (rs && !PO.bad[i]) rs.forEach(function (r, k) { PO.warm.push([PO.img[i][k], r]); }); });
+}
+function pourWarm() {
+  var w = PO.warm.shift();
+  if (w) pourCopy(w[0], w[1], w[1]);
+  if (!PO.warm.length) { PO.warm = null; PO.full = true; PO.cur = -1; }
+}
+function pourShow(i) {
+  var m = PO.man, c = PO.ctx;
+  if (PO.full) { c.clearRect(0, 0, pourEl.width, pourEl.height); c.drawImage(PO.base, m.base[0] * PO.k, m.base[1] * PO.k, m.base[2] * PO.k, m.base[3] * PO.k); PO.full = false; PO.cur = -1; }
+  if (i === PO.cur) return;
+  if (m.f[i] && PO.bad[i]) return;                     // cuadro que no bajó completo: queda el anterior, sin parpadeo
+  var ok = function (j) { return j >= 0 && m.f[j] && !PO.bad[j]; };
+  if (ok(PO.cur)) m.f[PO.cur].forEach(function (r) { pourCopy(PO.base, r, m.base); });   // vuelve la base donde estaba el cuadro anterior
+  if (ok(i)) m.f[i].forEach(function (r, k) { pourCopy(PO.img[i][k], r, r); });
+  PO.cur = i;
+}
 
 function frame() {
   var now = performance.now(), dt = Math.min(.05, (now - (frame.t || now)) / 1000); frame.t = now;
@@ -271,18 +360,35 @@ function frame() {
   if (off || !dt) return;
   quality(now, dt);
   if ((rectT -= dt) <= 0) { rects(); rectT = .25; }
+  if (PO.on) pourMask(pourEl.getBoundingClientRect());   // lectura antes de cualquier escritura del cuadro: sin layout forzado
   if (lastMove) { var lm = lastMove; lastMove = null; if (!drag) { stage.classList.toggle('is-grab', cup.hit(lm.x, lm.y) || bag.hit(lm.x, lm.y)); if (scrollY < innerHeight && !REDUCED) push(lm.x, lm.y, lm.t); } }
   var kk = 1 - Math.exp(-dt * 3.6); cmx += (mx - cmx) * kk; cmy += (my - cmy) * kk;
   var ks = D.lenis ? 1 : 1 - Math.exp(-dt * 7); csp += (sp - csp) * ks;  // con Lenis el scroll ya llega suavizado
   var sv = (scrollY - lastScrollY) / Math.max(dt, .001); lastScrollY = scrollY; scrollV += (sv - scrollV) * .2;
+  // café: 'land' lleva el vaso de frente (el giro sigue con el scroll y aterriza en la vista 0); 'pp' sirve el café
+  var land = PO.ok ? smooth(POUR.L0, POUR.L1, csp) : 0, pp = PO.ok ? Math.max(0, Math.min(1, (csp - POUR.P0) / (POUR.P1 - POUR.P0))) : 0;
+  D.pourLock = land > 0;
+  if (land > 0 && drag && drag.o === cup) up();
+  var pourOn = PO.ready && !D.pourOff && pp > 0 && D.expo > 0;   // D.pourOff: interruptor para pruebas
+  if (pourOn && !PO.on) PO.full = true;
+  PO.on = pourOn;
+  // relevo: mientras la tapa todavía no se movió (cuadros 0-2) el café aparece por encima del vaso, que sigue debajo;
+  // los dos filtros de muestreo (WebGL y 2D) difieren en menos de un píxel y un fundido lo vuelve invisible
+  PO.mix = PO.on ? smooth(0, 2 / 71, pp) : 0; PO.solo = PO.on && PO.mix >= 1;
   OB.forEach(function (o, j) {
-    if (!o.drag) { var target = REDUCED ? 0 : o.auto * D.spin; o.v += (target - o.v) * Math.min(1, dt * 1.4); o.a += o.v * dt; }
+    var ld = j ? 0 : land;
+    if (!o.drag) { var target = REDUCED ? 0 : o.auto * D.spin * (1 - ld); o.v += (target - o.v) * Math.min(1, dt * 1.4); o.a += o.v * dt; }
     var look = REDUCED ? 0 : cmx * (j ? .55 : .9) + csp * Math.PI * (j ? -.6 : .75);
     if (o.drag && o.pl !== undefined) o.a -= look - o.pl; o.pl = look;
-    var shown = D.expo > 0 ? o.draw(o.a + look) : o.a + look;   // invisible: no se dibuja
+    var ang = o.a + look;
+    // el destino es la próxima vista de frente hacia adelante (con margen, para que nunca retroceda)
+    if (ld > 0) { if (o.T === undefined) o.T = TAU * Math.ceil((ang + 1.2) / TAU); ang += (o.T - ang) * ld; } else o.T = undefined;
+    var shown = D.expo > 0 && !(j === 0 && PO.solo) ? o.draw(ang) : ang;   // invisible o tapado por el café: no se dibuja
     if (j === 1) { bagW = prevLook[1] === null ? 0 : (shown - prevLook[1]) / Math.max(dt, .001); bagAng = shown; }
     prevLook[j] = shown;
   });
+  if (PO.on) { if (PO.warm) { PO.warm = null; PO.full = true; } pourShow(Math.round(pp * PO.man.END)); }
+  else if (PO.warm && !loadedRes) pourWarm();
   // granos: un mensaje por cuadro con el estado de la bolsa; la física y el dibujo corren en su hilo.
   // En equipos chicos, con los granos quietos y sin interacción, se redibujan a 30 Hz.
   // a 120 Hz (ProMotion) los granos se calculan y dibujan a 60: invisible a ese tamaño, la mitad de trabajo
@@ -300,7 +406,8 @@ function frame() {
   // cámara: travelling de acercamiento; los productos van al centro y crecen
   var e = REDUCED ? 0 : csp * csp * (3 - 2 * csp);
   css(stage, 'transform', MOB.matches ? 'translate3d(0,' + (-e * 10).toFixed(2) + 'svh,0) scale(' + (1 + e * .1).toFixed(4) + ')' : 'translate3d(' + (-e * 9).toFixed(2) + 'vw,' + (-e * 2).toFixed(2) + 'vh,0) scale(' + (1 + e * .14).toFixed(4) + ')');
-  css(cupEl, 'transform', 'translate3d(' + (-cmx * 40).toFixed(1) + 'px,' + (-cmy * 40).toFixed(1) + 'px,0) rotate(' + (cmx * 3).toFixed(2) + 'deg)');
+  var cupT = 'translate3d(' + (-cmx * 40).toFixed(1) + 'px,' + (-cmy * 40).toFixed(1) + 'px,0) rotate(' + (cmx * 3).toFixed(2) + 'deg)';
+  css(cupEl, 'transform', cupT); if (PO.ok) css(pourEl, 'transform', cupT);
   css(bagEl, 'transform', 'translate3d(' + (-cmx * 18).toFixed(1) + 'px,' + (-cmy * 18).toFixed(1) + 'px,0) rotate(' + (cmx * 1.5).toFixed(2) + 'deg)');
   css(wall, 'transform', 'translate3d(' + (cmx * 10).toFixed(1) + 'px,' + (cmy * 8 - e * 20).toFixed(1) + 'px,0) scale(1.04)');
   // la fuente de luz sigue apenas al cursor (la respiración del haz es una animación CSS en el compositor)
@@ -308,9 +415,10 @@ function frame() {
   css(beam, 'opacity', D.beam.toFixed(3));
   // exposición de los productos + cambio de foco cuando sube la carta
   var over = Math.max(0, Math.min(1, (scrollY - roomH) / innerHeight)), ex = D.expo, op = Math.min(1, ex * 3).toFixed(3);
-  css(cupEl, 'opacity', op); css(bagEl, 'opacity', op);
+  css(cupEl, 'opacity', PO.solo ? '0' : op); css(bagEl, 'opacity', op); if (PO.ok) css(pourEl, 'opacity', PO.on ? (op * PO.mix).toFixed(3) : '0');
   var bright = (.1 + .9 * Math.pow(ex, 1.4)) * (D.dof ? 1 - over * .35 : 1), blur = D.dof ? over * 8 : 0;
   cup.ex = bag.ex = Math.min(1, bright);
+  if (PO.ok) css(pourEl, 'filter', PO.on && bright < .999 ? 'brightness(' + bright.toFixed(3) + ')' : '');   // misma exposición que el shader del vaso
   css(stage, 'filter', blur > .05 ? 'blur(' + blur.toFixed(2) + 'px)' : '');
   css(dim, 'opacity', (over * (D.dof ? .4 : .6)).toFixed(3));
 }
