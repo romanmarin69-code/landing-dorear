@@ -307,7 +307,7 @@ function pourSize() {
   st.width = w + 'px'; st.height = h + 'px'; st.transformOrigin = (el + cw / 2) + 'px ' + (et + ch / 2) + 'px';
   var bw = Math.min(Math.round(w * DPR), Math.round(m.W * PO.as)), bh = Math.round(bw * m.H / m.W);
   if (pourEl.width !== bw || pourEl.height !== bh) { pourEl.width = bw; pourEl.height = bh; }
-  PO.k = bw / m.W; PO.ctx = pourEl.getContext('2d'); PO.cur = -1; PO.full = true;
+  PO.k = bw / m.W; PO.ctx = pourEl.getContext('2d'); PO.cur = -1; PO.full = true; PO.faded = false; PO.fg = null;
 }
 // reemplaza los píxeles de un rectángulo del render (en px de render) por los de una imagen dibujada en 'dst'
 function pourCopy(img, rect, dst) {
@@ -316,14 +316,20 @@ function pourCopy(img, rect, dst) {
   c.save(); c.beginPath(); c.rect(x0, y0, x1 - x0, y1 - y0); c.clip(); c.globalCompositeOperation = 'copy';
   c.drawImage(img, dst[0] * k, dst[1] * k, dst[2] * k, dst[3] * k); c.restore();
 }
-/* el chorro nace de la oscuridad debajo del menú: sin esto pasa por detrás del logo. Máscara en coordenadas
-   del lienzo (antes de sus transformaciones), calculada con su caja en pantalla leída al inicio del cuadro. */
-function pourMask(r) {
-  var lh = parseFloat(pourEl.style.height) || 1, k = lh / Math.max(1, r.height);
-  var a = Math.round((PO.navB + innerHeight * .02 - r.top) * k), b = Math.round((PO.navB + innerHeight * .2 - r.top) * k);
-  if (a === PO.ma && b === PO.mb) return; PO.ma = a; PO.mb = b;
-  var g = 'linear-gradient(to bottom,transparent ' + a + 'px,#000 ' + b + 'px)';
-  pourEl.style.webkitMaskImage = g; pourEl.style.maskImage = g;
+/* el chorro nace de la oscuridad debajo del menú: sin esto pasa por detrás del logo. El fundido se pinta en el
+   lienzo ('destination-out'), no con mask-image: una máscara CSS sobre esta capa grande traba en placas modestas.
+   Se calcula al entrar al tramo, con la caja del lienzo en pantalla (el escenario casi no se mueve durante el café). */
+function pourFade(r) {
+  var k = pourEl.height / Math.max(1, r.height);       // px de pantalla → px del lienzo
+  PO.fa = Math.round((PO.navB + innerHeight * .02 - r.top) * k); PO.fb = Math.round((PO.navB + innerHeight * .2 - r.top) * k);
+  var g = PO.ctx.createLinearGradient(0, PO.fa, 0, PO.fb); g.addColorStop(0, '#000'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  PO.fg = g; PO.full = true;
+}
+function pourFadeRect(rect) {                          // aplica el fundido sobre la parte de un rectángulo (px de render) que lo toca
+  if (!PO.fg) return;
+  var k = PO.k, c = PO.ctx, x0 = Math.floor(rect[0] * k), y0 = Math.floor(rect[1] * k), x1 = Math.ceil((rect[0] + rect[2]) * k), y1 = Math.min(Math.ceil((rect[1] + rect[3]) * k), PO.fb);
+  if (y1 <= y0) return;
+  c.save(); c.globalCompositeOperation = 'destination-out'; c.fillStyle = PO.fg; c.fillRect(x0, y0, x1 - x0, y1 - y0); c.restore();
 }
 /* precalentamiento: la primera vez que se dibuja una imagen el navegador la sube a la placa, y en Safari eso es un
    tirón justo cuando aparece el café. Se dibuja cada zona una vez, de a una por cuadro y con el lienzo invisible. */
@@ -338,12 +344,12 @@ function pourWarm() {
 }
 function pourShow(i) {
   var m = PO.man, c = PO.ctx;
-  if (PO.full) { c.clearRect(0, 0, pourEl.width, pourEl.height); c.drawImage(PO.base, m.base[0] * PO.k, m.base[1] * PO.k, m.base[2] * PO.k, m.base[3] * PO.k); PO.full = false; PO.cur = -1; }
+  if (PO.full) { c.clearRect(0, 0, pourEl.width, pourEl.height); c.drawImage(PO.base, m.base[0] * PO.k, m.base[1] * PO.k, m.base[2] * PO.k, m.base[3] * PO.k); pourFadeRect(m.base); PO.full = false; PO.cur = -1; }
   if (i === PO.cur) return;
   if (m.f[i] && PO.bad[i]) return;                     // cuadro que no bajó completo: queda el anterior, sin parpadeo
   var ok = function (j) { return j >= 0 && m.f[j] && !PO.bad[j]; };
   if (ok(PO.cur)) m.f[PO.cur].forEach(function (r) { pourCopy(PO.base, r, m.base); });   // vuelve la base donde estaba el cuadro anterior
-  if (ok(i)) m.f[i].forEach(function (r, k) { pourCopy(PO.img[i][k], r, r); });
+  if (ok(i)) m.f[i].forEach(function (r, k) { pourCopy(PO.img[i][k], r, r); pourFadeRect(r); });
   PO.cur = i;
 }
 
@@ -364,7 +370,9 @@ function frame() {
   if (off || !dt) return;
   quality(now, dt);
   if ((rectT -= dt) <= 0) { rects(); rectT = .25; }
-  if (PO.on) pourMask(pourEl.getBoundingClientRect());   // lectura antes de cualquier escritura del cuadro: sin layout forzado
+  // fundido bajo el menú: se mide una vez al entrar al tramo (lectura antes de escribir estilos: sin layout forzado)
+  if (PO.on && !PO.faded) { pourFade(pourEl.getBoundingClientRect()); PO.faded = true; }
+  if (!PO.on) PO.faded = false;
   if (lastMove) { var lm = lastMove; lastMove = null; if (!drag) { stage.classList.toggle('is-grab', cup.hit(lm.x, lm.y) || bag.hit(lm.x, lm.y)); if (scrollY < innerHeight && !REDUCED) push(lm.x, lm.y, lm.t); } }
   var kk = 1 - Math.exp(-dt * 3.6); cmx += (mx - cmx) * kk; cmy += (my - cmy) * kk;
   var ks = D.lenis ? 1 : 1 - Math.exp(-dt * 7); csp += (sp - csp) * ks;  // con Lenis el scroll ya llega suavizado
