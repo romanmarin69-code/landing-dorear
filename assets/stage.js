@@ -266,11 +266,15 @@ var POUR = { L0: .06, L1: .5, P0: .56, P1: .98 };
 function pourSpan() { POUR.P0 = Math.max(.56, Math.min(.8, innerHeight * .8 / roomH + .03)); POUR.L1 = POUR.P0 - .06; }
 var pourEl = $('#cupPour'), PO = { ok: !REDUCED && !!pourEl, ready: false, on: false, cur: -1, k: 1, img: [], bad: [], base: null, man: null };
 if (PO.ok) document.documentElement.classList.add('has-pour');
+D.pour = PO;   // estado del café, para diagnóstico desde la consola
 function smooth(a, b, x) { x = Math.max(0, Math.min(1, (x - a) / (b - a))); return x * x * (3 - 2 * x); }
 if (PO.ok) D.loaded.then(function () {
-  var dir = SET === 'h-sm' ? 'm' : 'd';
+  // set liviano (1/4 de píxeles) en pantallas chicas y donde la calidad adaptativa ya bajó: sube 4× más rápido a la placa
+  var dir = SET === 'h-sm' || Q >= 1 ? 'm' : 'd';
   PO.as = dir === 'm' ? .5 : 1;                        // escala de los archivos respecto del render
+  PO.loadedAt = performance.now();
   (window.requestIdleCallback || function (f) { setTimeout(f, 300); })(function () {
+    PO.fetchAt = performance.now();
     fetch('cafe/pour.json').then(function (r) { return r.json(); }).then(function (man) {
       PO.man = man;
       // cada cuadro trae 0..n zonas que cambian (tapa, chorro, sombras), cada una en su archivo
@@ -285,7 +289,7 @@ if (PO.ok) D.loaded.then(function () {
               .then(function (b) { return createImageBitmap(b); })
               .then(function (bm) { if (it[1] < 0) PO.base = bm; else PO.img[it[1]][it[2]] = bm; })
               .catch(function () { if (it[1] >= 0) PO.bad[it[1]] = 1; })      // un cuadro incompleto se omite; la base es obligatoria
-              .then(function () { act--; if (--left === 0) { pourSize(); pourWarmList(); PO.ready = !!PO.base; } else pump(); });
+              .then(function () { act--; if (--left === 0) { pourSize(); pourWarmList(); PO.ready = !!PO.base; PO.readyAt = performance.now(); } else pump(); });
           })(list.shift());
         }
       })();
@@ -369,7 +373,9 @@ function frame() {
   var land = PO.ok ? smooth(POUR.L0, POUR.L1, csp) : 0, pp = PO.ok ? Math.max(0, Math.min(1, (csp - POUR.P0) / (POUR.P1 - POUR.P0))) : 0;
   D.pourLock = land > 0;
   if (land > 0 && drag && drag.o === cup) up();
-  var pourOn = PO.ready && !D.pourOff && pp > 0 && D.expo > 0;   // D.pourOff: interruptor para pruebas
+  // si el café termina de bajar con el vaso a mitad del tramo, no aparece de golpe: espera a que se vuelva antes del tramo
+  if (PO.ready && pp === 0) PO.armed = true;
+  var pourOn = PO.ready && PO.armed && !D.pourOff && pp > 0 && D.expo > 0;   // D.pourOff: interruptor para pruebas
   if (pourOn && !PO.on) PO.full = true;
   PO.on = pourOn;
   // relevo: mientras la tapa todavía no se movió (cuadros 0-2) el café aparece por encima del vaso, que sigue debajo;
@@ -388,7 +394,7 @@ function frame() {
     prevLook[j] = shown;
   });
   if (PO.on) { if (PO.warm) { PO.warm = null; PO.full = true; } pourShow(Math.round(pp * PO.man.END)); }
-  else if (PO.warm && !loadedRes) pourWarm();
+  else if (PO.warm && !loadedRes && !drag && Math.abs(scrollV) < 30) pourWarm();   // de a una, y nunca mientras se scrollea o arrastra
   // granos: un mensaje por cuadro con el estado de la bolsa; la física y el dibujo corren en su hilo.
   // En equipos chicos, con los granos quietos y sin interacción, se redibujan a 30 Hz.
   // a 120 Hz (ProMotion) los granos se calculan y dibujan a 60: invisible a ese tamaño, la mitad de trabajo
@@ -439,7 +445,7 @@ function setQ(n) {
 try { var q0 = +localStorage.getItem('dorear:q'); if (q0 > 0) setQ(Math.min(2, q0)); } catch (_) {}
 function quality(now, dt) {
   // sólo cuenta con la portada a la vista, la carga terminada y la pestaña activa
-  if (Q >= 2 || loadedRes || REDUCED || document.hidden || scrollY > innerHeight) return;
+  if (Q >= 2 || loadedRes || REDUCED || document.hidden || scrollY > innerHeight || PO.warm) return;   // el precalentamiento del café no cuenta
   if (qGrace > 0) { qGrace -= dt; return; }
   if (dt >= .05) return;                          // un tirón aislado (cambio de pestaña, GC) no es el régimen
   qT += dt; qN++;
