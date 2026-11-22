@@ -47,11 +47,13 @@ var css = getComputedStyle(root), CREAM = css.getPropertyValue('--cream').trim()
     } catch (_) { return; }
     var d = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(p.weekday), m = (+p.hour % 24) * 60 + (+p.minute);
     if (d < 0) return;
-    // sólo se anuncia cuando está abierto; cerrado no se muestra nada (los horarios completos están en el pie)
+    // abierto: hasta qué hora (punto dorado). Cerrado: cuándo abre, así quien entra de noche sabe cuándo venir
     var h = hoursOf(d), open = m >= h[0] && m < h[1];
     el.classList.toggle('is-open', open);
-    el.hidden = !open;
-    if (open) txt.textContent = 'Abierto · hasta las ' + hm(h[1]);
+    el.hidden = false;
+    txt.textContent = open ? 'Abierto · hasta las ' + hm(h[1])
+      : m < h[0] ? 'Cerrado · abre hoy a las ' + hm(h[0])
+      : 'Cerrado · abre mañana a las ' + hm(hoursOf((d + 1) % 7)[0]);
   }
   tick(); setInterval(tick, 60000);
 })();

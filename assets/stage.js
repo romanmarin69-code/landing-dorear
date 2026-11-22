@@ -21,7 +21,8 @@ var SAFARI = /^((?!chrome|chromium|crios|fxios|edg|android).)*safari/i.test(UA);
 var MAC = /Mac/.test(N_.platform || UA) && !(N_.maxTouchPoints > 1);
 // set de vistas: 66 % en pantallas chicas o equipos modestos sin pantalla densa
 var SET = (MOB.matches || conn.saveData || (LOW && DPR < 1.5)) ? 'h-sm' : 'h';
-if (SET === 'h-sm') DPR = Math.min(DPR, 1.5);   // más densidad que la textura no suma nitidez, sólo costo
+if (SET === 'h-sm') DPR = Math.min(DPR, 1.5);
+var LITE = REDUCED || !!conn.saveData;   // las 219 vistas se piden recién con la primera interacción (ver seq)   // más densidad que la textura no suma nitidez, sólo costo
 
 var seed = 7; function rnd() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
 
@@ -104,8 +105,13 @@ function seq(id, name, autoSpeed, startAngle) {
   // descarga y decodificacion fuera del hilo principal; el orden sigue el sentido del giro desde la vista inicial
   var b0 = lut[Math.floor(((startAngle * K) % P + P) % P)], order = [], dq = autoSpeed >= 0 ? 1 : -1;
   for (var k = 0; k < N; k++) order.push(md(b0 + dq * k));
+  // sin giro automático (movimiento reducido) o con ahorro de datos: sólo la vista inicial; el resto, recién
+  // cuando alguien toca o usa las flechas sobre los productos (~5 MB menos para quien nunca los gira)
+  var rest = LITE ? order.splice(1) : [];
+  o.more = function () { if (!rest.length) return; order = order.concat(rest); rest = []; afterPaint.then(pump); };
   var act = 0;
-  afterPaint.then(function pump() {
+  afterPaint.then(pump);
+  function pump() {
     while (act < 6 && order.length) {
       (function (i) {
         act++;
@@ -115,7 +121,7 @@ function seq(id, name, autoSpeed, startAngle) {
           .then(function () { act--; pump(); });
       })(order.shift());
     }
-  });
+  }
   /* Subida a la placa. Cada vista se sube y se dibuja una vez, invisible: Safari (y otros) difieren la subida real
      hasta el primer uso, y ese primer uso en plena animación es un tirón. Durante la pantalla de carga se suben
      todas; después, a lo sumo una por cuadro. */
@@ -128,7 +134,7 @@ function seq(id, name, autoSpeed, startAngle) {
     }
     return did;
   };
-  o.done = 0; o.total = N + (gl ? 2 : 0);
+  o.done = 0; o.total = (LITE ? 1 : N) + (gl ? 2 : 0);
   var cx = gl ? null : cv.getContext('2d');
   function near(i) { if (tex[i]) return i; for (var d = 1; d <= N / 2; d++) { if (tex[md(i + d)]) return md(i + d); if (tex[md(i - d)]) return md(i - d); } return -1; }
   o.draw = function (angle) {
@@ -218,6 +224,7 @@ addEventListener('pointermove', function (e) {
   } else if (e.target === stage || stage.contains(e.target)) lastMove = { x: e.clientX, y: e.clientY, t: performance.now() };
 }, { passive: true });
 stage.addEventListener('pointerdown', function (e) {
+  if (LITE) OB.forEach(function (x) { x.more(); });
   var o = cup.hit(e.clientX, e.clientY) && !D.pourLock ? cup : bag.hit(e.clientX, e.clientY) ? bag : null;
   if (!o) { burst(e.clientX, e.clientY); return; }
   o.v = 0; drag = { o: o, x: e.clientX, t: performance.now() }; o.drag = true; stage.classList.add('is-grabbing');
@@ -227,7 +234,7 @@ function up() { if (drag) { drag.o.drag = false; drag = null; } stage.classList.
 stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', up); stage.addEventListener('lostpointercapture', up); addEventListener('blur', up);
 stage.addEventListener('keydown', function (e) {
   var k = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0; if (!k) return;
-  e.preventDefault(); OB.forEach(function (o, j) { if (!j && D.pourLock) return; o.v += k * KICK * (j ? .8 : 1); });
+  e.preventDefault(); if (LITE) OB.forEach(function (x) { x.more(); }); OB.forEach(function (o, j) { if (!j && D.pourLock) return; o.v += k * KICK * (j ? .8 : 1); });
 });
 addEventListener('scroll', function () { sp = Math.min(1, Math.max(0, scrollY / roomH)); }, { passive: true });
 
